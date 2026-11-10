@@ -24,8 +24,11 @@
 - `scripts/net.gd` (autoload `Net`): ENet 연결(방장 = 서버, 아이디 1). 방 찾기는 손님이 UDP `FIND`를 브로드캐스트하고 방장이 `ROOM`으로 답장. 게임 중에는 각자 자기 판을 계산하고 판 모양(`_state`, 0.1초 간격 + 1초마다), 공격(`_attack`), 탈락(`_out`)만 주고받는다.
 
 ## 숨은그림 찾기 (성인 난이도)
-- `scripts/hidden_puzzle.gd` (`HiddenPuzzle`): seed + 단계로 그림을 만든다(같은 seed면 같은 그림 → 대결에서 모두 같은 그림). 닮은꼴 무리(`GROUPS`)에서 가짜 그림을 고르고 정답 근처에 몰아 둔다. 정답 이모지는 그림에 딱 하나. 정답은 그리는 순서 중간에 끼워 일부가 가려지지만 가운데는 비워 둔다.
-- `scripts/hidden_world.gd` (`HiddenWorld`): 그림을 그린다. 확대·이동은 노드 scale/position으로 해서 다시 그리지 않는다. 이모지는 64px 한 크기로 그리고 변환으로 늘인다.
+- 잡지 숨은그림·월리를 찾아라 방식: 한 장의 빽빽한 흑백 선 그림 장면 안에 물건을 같은 선으로 숨긴다.
+- `scripts/hidden_props.gd` (`HiddenProps`): 장면 소품 선 그림(아이들, 동물, 책장, 책상, 의자, 화분, 상자, 책, 벽 장식…). 소품마다 "채우기(종이색, 뒤를 가림) + 선". 숨길 물건과 같은 모양의 소품은 넣지 않는다.
+- `scripts/hidden_shapes.gd` (`HiddenShapes`): 숨길 물건 33개의 선 그림(-0.5~0.5 좌표)과 한글 이름.
+- `scripts/hidden_puzzle.gd` (`HiddenPuzzle`): seed + 단계로 장면을 만든다(같은 seed면 같은 그림 → 대결에서 모두 같은 그림). 벽 → 바닥 납작한 것 → 서 있는 것 순서로 그리고, 3px 칸 가림 계산으로 앞 그림 뒤의 선을 지운다(`_flatten`). 물건은 후보 48개 중 윤곽선이 장면 선과 맞닿는 비율(`_alignment`)이 단계의 `camo`에 맞는 자리에 숨긴다. `clear` 확률로 물건 안쪽 장면 선을 지운다.
+- `scripts/hidden_world.gd` (`HiddenWorld`): 그림을 그린다. 장면 선과 물건 선은 같은 색(`HIDDEN_INK`)·굵기. 확대·이동은 노드 scale/position으로 해서 다시 그리지 않는다. `scripts/shape_icon.gd`는 찾을 목록 칸의 물건 그림.
 - `scripts/hidden_game.gd`: 한 손가락 끌기 = 이동, 두 손가락 = 확대(PC는 휠), 톡 = 찾기. 엉뚱한 곳을 누르면 잠깐 못 누름(+혼자 하기는 시간 벌칙). 💡 힌트는 근처 동그라미만 보여 줌. 시작 전 3·2·1.
 - 혼자 하기: 단계(`[hidden] level`)와 단계별 최고 기록(`best_<n>`)을 `user://settings.cfg`에 저장. 난이도 표는 `Config.HIDDEN_STAGES`.
 - 대결: `Net.start_match("hidden")`. 찾을 때마다 `Net.send_score`, 방장이 처음 다 찾은 사람을 `declare_winner`로 정함. 🏠로 나가면 점수 -1(그만둠).

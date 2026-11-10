@@ -91,7 +91,9 @@ const BOARD_GRID := Color("#2a3042")    # 판 격자선 색
 const SCREEN_BG := Color("#151925")     # 화면 바탕색
 
 # ─── 숨은그림 찾기 ───
-const HIDDEN_WORLD := Vector2(1440, 2100)        # 그림 전체 크기 (화면보다 훨씬 커서 확대해서 찾는다)
+const HIDDEN_WORLD := Vector2(1200, 1700)        # 그림 전체 크기 (화면보다 커서 확대해서 찾는다)
+const HIDDEN_INK := Color("#2b2620")             # 선 색 (배경과 숨은 물건이 같은 색·같은 굵기여야 숨는다)
+const HIDDEN_INK_WIDTH := 3.0                    # 선 굵기 (그림 좌표 px)
 const HIDDEN_VIEW_RECT := Rect2(0, 112, 720, 940)  # 그림이 보이는 창 (720x1280 무대 기준)
 const HIDDEN_ZOOM_MAX := 3.0        # 가장 크게 확대할 수 있는 배율
 const HIDDEN_TAP_TOLERANCE := 14.0  # 정답 그림에서 이만큼(화면 px) 벗어나도 맞은 것으로 봄
@@ -105,17 +107,18 @@ const HIDDEN_COUNTDOWN := 3         # 시작 전 3, 2, 1
 const HIDDEN_BATTLE_STAGE := 3      # 대결에서 쓰는 단계 (아래 표의 번호, 0부터)
 
 # 단계별 난이도. 단계가 표 끝을 넘으면 마지막 줄을 계속 쓴다.
-#   objects: 그림 속 물건 수 / targets: 찾을 그림 수 / size: 그림 크기 범위(그림 좌표 px)
-#   rot: 최대 기울기(도) / alpha: 가장 흐린 정도(1이면 안 흐림) / flip: 좌우 뒤집힐 확률
-#   tint: 색을 살짝 바꿈 / silhouette: 찾을 목록을 검은 그림자로만 보여 줄 확률
-#   near: 정답 바로 근처에 놓는 닮은꼴 가짜 그림 수
+#   targets: 찾을 물건 수 / extras: 찾지 않아도 되는 다른 숨은 물건 수 (헷갈리게 함)
+#   size: 물건 크기 범위(그림 좌표 px) / rot: 최대 기울기(도) / flip: 좌우 뒤집힐 확률
+#   camo: 숨기기 정도 0~1. 자리 후보 중 물건 윤곽이 배경 선과 얼마나 겹치는 자리를 고를지 (1 = 가장 잘 숨는 자리)
+#   clear: 물건 안쪽의 배경 선을 지워 줄 확률 (1이면 물건 모양이 또렷, 0이면 배경 선이 물건을 가로질러 더 어려움)
+#   props: 바닥에 세워 놓는 소품(사람, 동물, 가구) 수 / clutter: 바닥에 흩어진 납작한 것(종이, 책) 수
 const HIDDEN_STAGES := [
-	{"objects": 170, "targets": 6, "size": [40, 72], "rot": 25, "alpha": 1.0, "flip": 0.0, "tint": false, "silhouette": 0.0, "near": 2},
-	{"objects": 230, "targets": 7, "size": [34, 66], "rot": 60, "alpha": 0.9, "flip": 0.15, "tint": false, "silhouette": 0.0, "near": 3},
-	{"objects": 290, "targets": 8, "size": [30, 60], "rot": 120, "alpha": 0.8, "flip": 0.3, "tint": false, "silhouette": 0.3, "near": 3},
-	{"objects": 350, "targets": 9, "size": [28, 56], "rot": 180, "alpha": 0.7, "flip": 0.4, "tint": true, "silhouette": 0.5, "near": 4},
-	{"objects": 410, "targets": 10, "size": [24, 52], "rot": 180, "alpha": 0.6, "flip": 0.5, "tint": true, "silhouette": 0.75, "near": 4},
-	{"objects": 480, "targets": 12, "size": [22, 48], "rot": 180, "alpha": 0.5, "flip": 0.5, "tint": true, "silhouette": 1.0, "near": 5},
+	{"targets": 6, "extras": 2, "size": [110, 150], "rot": 25, "flip": 0.0, "camo": 0.5, "clear": 1.0, "props": 26, "clutter": 14},
+	{"targets": 7, "extras": 4, "size": [100, 140], "rot": 45, "flip": 0.2, "camo": 0.65, "clear": 0.8, "props": 32, "clutter": 18},
+	{"targets": 8, "extras": 6, "size": [90, 125], "rot": 90, "flip": 0.35, "camo": 0.75, "clear": 0.6, "props": 38, "clutter": 22},
+	{"targets": 10, "extras": 8, "size": [80, 115], "rot": 180, "flip": 0.5, "camo": 0.85, "clear": 0.4, "props": 44, "clutter": 26},
+	{"targets": 12, "extras": 10, "size": [72, 105], "rot": 180, "flip": 0.5, "camo": 0.92, "clear": 0.25, "props": 50, "clutter": 30},
+	{"targets": 14, "extras": 12, "size": [64, 95], "rot": 180, "flip": 0.5, "camo": 1.0, "clear": 0.1, "props": 58, "clutter": 34},
 ]
 
 # ─── 네트워크 ───

@@ -109,35 +109,41 @@ func _build_ui() -> void:
 	view.add_child(world)
 	world.set_puzzle(puzzle)
 
-	# 찾을 목록 (한 줄에 6칸, 최대 2줄)
+	# 찾을 목록: 물건 모양(선 그림)과 이름. 한 줄에 최대 7칸, 최대 2줄
 	var n := puzzle.targets.size()
-	var per_row := mini(6, n)
+	var per_row := mini(7, n)
 	var rows := ceili(float(n) / per_row)
+	var cell := Vector2(minf(LIST_CELL.x, 712.0 / per_row), LIST_CELL.y)
 	for t in range(n):
 		var row := t / per_row
 		var col := t % per_row
 		var in_row := per_row if row < rows - 1 else n - per_row * (rows - 1)
-		var start_x := (720.0 - in_row * LIST_CELL.x) / 2.0
-		var pos := Vector2(start_x + col * LIST_CELL.x, LIST_TOP + row * (LIST_CELL.y + 6))
+		var start_x := (720.0 - in_row * cell.x) / 2.0
+		var pos := Vector2(start_x + col * cell.x, LIST_TOP + row * (cell.y + 6))
 		var panel := Panel.new()
-		panel.position = pos + Vector2(4, 0)
-		panel.size = LIST_CELL - Vector2(8, 0)
+		panel.position = pos + Vector2(3, 0)
+		panel.size = cell - Vector2(6, 0)
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color("#f4ecd8")
-		style.set_corner_radius_all(16)
+		style.bg_color = Color("#faf6ea")
+		style.set_corner_radius_all(14)
 		panel.add_theme_stylebox_override("panel", style)
 		stage.add_child(panel)
-		var label := Label.new()
-		label.text = puzzle.targets[t]["e"]
-		label.set_anchors_preset(Control.PRESET_FULL_RECT)
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 60)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if puzzle.targets[t]["silhouette"]:
-			label.modulate = Color(0, 0, 0)   # 검은 그림자로만 보여 줌 (색을 0으로 곱하면 까맣게 됨)
+		var label := ShapeIcon.new()
+		label.position = Vector2(8, 4)
+		label.size = Vector2(panel.size.x - 16, panel.size.y - 34)
+		label.set_shape(puzzle.targets[t]["shape"])
 		panel.add_child(label)
+		var name_label := Label.new()
+		name_label.text = puzzle.targets[t]["name"]
+		name_label.position = Vector2(0, panel.size.y - 30)
+		name_label.size = Vector2(panel.size.x, 28)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.clip_text = true
+		name_label.add_theme_font_size_override("font_size", 18)
+		name_label.add_theme_color_override("font_color", Color("#5a5040"))
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(name_label)
 		var check := Label.new()
 		check.text = "✔"
 		check.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -303,18 +309,18 @@ func _tap(p: Vector2) -> void:
 
 func _found(t: int) -> void:
 	puzzle.targets[t]["found"] = true
-	var obj: Dictionary = puzzle.objects[puzzle.targets[t]["obj"]]
+	var obj: Dictionary = puzzle.targets[t]
 	var from := _world_to_stage(obj["pos"])
 	if world.hint_on and obj["pos"].distance_to(world.hint_pos) <= Config.HIDDEN_HINT_RADIUS:
 		world.hint_on = false   # 힌트가 가리키던 그림을 찾았으면 힌트 끄기
 	world.queue_redraw()
 	fx.burst(from, Color("#2ecc71"), 16, 300.0)
-	fx.float_text("찾았다!", from - Vector2(0, 40), Color("#7dffb0"), 44, 0.7)
+	fx.float_text("%s!" % obj["name"], from - Vector2(0, 50), Color("#7dffb0"), 44, 0.8)
 	var cell: Dictionary = list_cells[t]
 	var cell_center: Vector2 = cell["panel"].position + cell["panel"].size / 2.0
-	fx.shoot(from, cell_center, Color("#fff3a0"), obj["e"], 0.45, func():
+	fx.shoot(from, cell_center, Color("#7dffb0"), "", 0.45, func():
 		cell["check"].visible = true
-		cell["label"].modulate = Color(1, 1, 1, 0.35)   # 찾은 그림은 흐리게 (그림자였어도 원래 색으로)
+		cell["label"].modulate = Color(1, 1, 1, 0.35)   # 찾은 물건은 목록에서 흐리게
 		cell["panel"].get_theme_stylebox("panel").bg_color = Color("#bfe8c9"))
 	Sfx.play("item_get")
 	_vibrate(30)
@@ -355,10 +361,9 @@ func _use_hint() -> void:
 	hint_button.text = "💡%d" % hints_left
 	hint_button.disabled = hints_left <= 0
 	var t: Dictionary = left[randi_range(0, left.size() - 1)]
-	var obj: Dictionary = puzzle.objects[t["obj"]]
 	# 정확한 자리 대신 근처를 가리킨다 (동그라미 안 어딘가에 있음)
 	var off := Vector2.from_angle(randf_range(0, TAU)) * randf_range(0.0, Config.HIDDEN_HINT_RADIUS * 0.6)
-	world.hint_pos = obj["pos"] + off
+	world.hint_pos = t["pos"] + off
 	world.hint_on = true
 	world.queue_redraw()
 	# 그 근처로 확대해서 데려간다

@@ -35,7 +35,11 @@ var pads := {}
 var _touch_owner := {}   # 손가락 번호 → 누르고 있는 버튼 이름
 var held := {"left": false, "right": false, "down": false}
 var _repeat := {"left": 0.0, "right": 0.0}
-var _down_time := 0.0    # ⬇ 버튼을 누르고 있는 시간 (짧으면 쾅, 길면 천천히 내리기)
+var _down_time := 0.0          # ▼ 버튼을 누르고 있는 시간
+var _down_last_press := -10.0  # ▼를 마지막으로 누른 시각(초). 두 번 누르기 판단에 씀
+var _down_block_until := 0.0   # 이 시각까지는 ▼를 무시 (쾅 직후 실수 방지)
+var _down_need_release := false  # 새 블록이 나왔는데 ▼를 계속 누르고 있으면, 손을 뗐다 다시 눌러야 내려간다
+var _swipes := {}              # 판 위 손가락 번호 → {"pos": 시작 위치, "time": 시작 시각}
 
 # 상대 판: 아이디 → {"view": BoardView, "label": Label, "button": Button}
 var opponents := {}
@@ -153,13 +157,19 @@ func _build_ui() -> void:
 		slot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		item_slots.append(slot)
 
-	# 조작 버튼 4개: ◀ ▶ ↻ ▼ (▼는 짧게 누르면 쾅, 길게 누르면 누르는 동안 내려감)
+	# 조작 버튼 4개: ◀ ▶ ↻ ▼ (▼: 한 번 = 한 칸, 꾹 = 쭉, 톡톡 = 쾅)
 	var names := ["left", "right", "rotate", "down"]
 	var icons := ["◀", "▶", "↻", "▼"]
 	var colors := [Color("#2f3a56"), Color("#2f3a56"), Color("#3d5a4a"), Color("#5a3d3d")]
 	for i in range(names.size()):
 		var rect := Rect2(Vector2(14 + i * (PAD_SIZE.x + PAD_GAP), PAD_TOP), PAD_SIZE)
 		_add_pad(names[i], rect, icons[i], colors[i])
+
+	# 버튼 바로 위 작은 사용법 안내
+	var how := _make_label("▼ 꾹 누르면 쭉   ·   ▼▼ 톡톡 또는 판을 아래로 휙 = 쾅!", 22,
+			Vector2(0, PAD_TOP - 34), Vector2(720, 30))
+	how.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	how.modulate = Color(1, 1, 1, 0.6)
 
 	# 화면 가운데에 잠깐 뜨는 안내 글
 	toast_label = _make_label("", 48, Vector2(BOARD_RECT.position.x, 520), Vector2(BOARD_RECT.size.x, 120))
@@ -286,9 +296,25 @@ func _input(event: InputEvent) -> void:
 			if pad_name != "":
 				_touch_owner[event.index] = pad_name
 				_pad_down(pad_name)
-		elif _touch_owner.has(event.index):
-			_pad_up(_touch_owner[event.index])
-			_touch_owner.erase(event.index)
+			elif _on_my_board(event.position):
+				# 판 위에서 손가락이 닿음: 아래로 휙 쓸어내리는지 지켜본다
+				_swipes[event.index] = {"pos": event.position, "time": _now()}
+		else:
+			if _touch_owner.has(event.index):
+				_pad_up(_touch_owner[event.index])
+				_touch_owner.erase(event.index)
+			_swipes.erase(event.index)
+	elif event is InputEventScreenDrag and _swipes.has(event.index):
+		# 빠르게 아래로 충분히 쓸었으면 쾅 (옆으로 더 많이 움직였으면 무시)
+		var s: Dictionary = _swipes[event.index]
+		var d: Vector2 = event.position - s["pos"]
+		if _now() - s["time"] > Config.SWIPE_MAX_TIME:
+			_swipes.erase(event.index)  # 너무 천천히 움직이면 휙이 아님
+		elif d.y >= Config.SWIPE_MIN_DISTANCE and d.y > absf(d.x) * 1.5:
+			_swipes.erase(event.index)
+			if not finished and not board.game_over and _now() >= _down_block_until:
+				_down_block_until = _now() + Config.DROP_COOLDOWN
+				_hard_drop()
 	elif event is InputEventScreenDrag:
 		# 손가락이 ◀ ▶ 버튼 밖으로 나가면 뗀 것으로 본다
 		if _touch_owner.has(event.index):
@@ -309,6 +335,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_pad_down(map[event.keycode])
 		else:
 			_pad_up(map[event.keycode])
+
+
+# 지금 시각(초). 두 번 누르기나 휙 판단에 쓴다.
+func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+# 화면 위치가 내 판 위인지 (조금 넉넉하게)
+func _on_my_board(pos: Vector2) -> bool:
+	return Rect2(stage.position + BOARD_RECT.position, BOARD_RECT.size).grow(20).has_point(pos)
 
 
 func _pad_at(pos: Vector2) -> String:
@@ -333,9 +369,26 @@ func _pad_down(pad_name: String) -> void:
 			_repeat["right"] = 0.0
 			_move(1)
 		"down":
-			# 아직 정하지 않음: 손을 빨리 떼면 쾅, 오래 누르면 천천히 내리기
+			var now := _now()
+			if now < _down_block_until:
+				return  # 방금 쾅 했음: 실수로 다음 블록까지 내리지 않게 잠깐 무시
+			if now - _down_last_press <= Config.DOUBLE_TAP_TIME:
+				# 톡톡 두 번 → 바닥까지 쾅
+				_down_last_press = -10.0
+				_down_block_until = now + Config.DROP_COOLDOWN
+				held["down"] = false
+				_hard_drop()
+				return
+			# 한 번 → 한 칸 내려가고, 계속 누르고 있으면 잠시 뒤부터 쭉
+			_down_last_press = now
 			held["down"] = true
+			_down_need_release = false
 			_down_time = 0.0
+			if board.try_move(0, 1):
+				fall_timer = 0.0
+				Sfx.play("move", 0.8, -6.0)
+				state_dirty = true
+				_refresh_board()
 		"rotate":
 			if board.try_rotate(1):
 				Sfx.play("rotate")
@@ -348,12 +401,8 @@ func _pad_down(pad_name: String) -> void:
 
 func _pad_up(pad_name: String) -> void:
 	_set_pad_look(pad_name, false)
-	if pad_name == "down" and held["down"]:
-		held["down"] = false
-		# 짧게 눌렀다 뗐으면 바닥까지 쾅
-		if _down_time < Config.DROP_HOLD_TIME and not finished and not board.game_over:
-			_hard_drop()
-		return
+	if pad_name == "down":
+		_down_need_release = false
 	if held.has(pad_name):
 		held[pad_name] = false
 
@@ -437,11 +486,12 @@ func _process(delta: float) -> void:
 				_repeat[dir_name] -= Config.MOVE_REPEAT_RATE
 				_move(-1 if dir_name == "left" else 1)
 
-	# ▼ 를 길게 누르고 있으면 빠르게 내려간다
+	# ▼ 를 누르고 있으면 잠시 뒤부터 빠르게 쭉 내려간다
 	var soft := false
-	if held["down"]:
+	if held["down"] and not _down_need_release:
 		_down_time += delta
-		soft = _down_time >= Config.DROP_HOLD_TIME
+		soft = _down_time >= Config.SOFT_DROP_DELAY
+	_update_down_icon()
 
 	# 중력: 시간이 되면 한 칸 내려간다
 	var interval := _fall_interval()
@@ -465,6 +515,17 @@ func _process(delta: float) -> void:
 			_after_lock(board.lock_piece())
 	else:
 		lock_timer = 0.0
+
+
+# ▼를 한 번 누른 직후(두 번째 누르면 쾅이 되는 동안)에는 버튼 그림을 ⤓ 금색으로 바꿔
+# "지금 한 번 더 누르면 쾅"이라는 것을 눈으로 알려 준다.
+func _update_down_icon() -> void:
+	var label: Label = pads["down"]["label"]
+	var armed: bool = not held["down"] and _now() - _down_last_press <= Config.DOUBLE_TAP_TIME
+	var text := "⤓" if armed else "▼"
+	if label.text != text:
+		label.text = text
+		label.add_theme_color_override("font_color", Color("#ffd84a") if armed else Color.WHITE)
 
 
 # 지금 한 칸 떨어지는 데 걸리는 시간. 레벨이 오르면 빨라지고, ⚡ 를 맞으면 더 빨라진다.
@@ -640,6 +701,9 @@ func _spawn_next() -> void:
 	fall_timer = 0.0
 	lock_timer = 0.0
 	lock_resets = 0
+	# ▼를 누른 채로 새 블록이 나오면, 새 블록은 손을 뗐다 다시 눌러야 내려간다 (모르고 내려가는 것 방지)
+	if held["down"]:
+		_down_need_release = true
 	if not board.spawn():
 		_refresh_board()
 		_i_lost()

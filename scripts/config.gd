@@ -24,7 +24,13 @@ const LOCK_RESET_LIMIT := 15   # 바닥에서 움직여 굳는 시간을 다시 
 # ─── 버튼을 누르고 있을 때 반복 이동 ───
 const MOVE_REPEAT_DELAY := 0.17  # 처음 누르고 반복이 시작되기까지(초)
 const MOVE_REPEAT_RATE := 0.05   # 반복할 때 한 칸 움직이는 간격(초)
-const DROP_HOLD_TIME := 0.18     # ⬇ 버튼을 이 시간(초)보다 짧게 누르면 바로 떨어뜨리기, 길게 누르면 누르는 동안 내려가기
+# ▼ 버튼은 ◀ ▶ 와 똑같이 동작한다: 한 번 누르면 한 칸, 누르고 있으면 쭉.
+# 바닥까지 쾅(되돌릴 수 없는 동작)은 실수로 안 나오게 "톡톡 두 번" 또는 "판을 아래로 휙"으로만 한다.
+const SOFT_DROP_DELAY := 0.15    # ▼를 누르고 이 시간(초)이 지나면 쭉 내려가기 시작
+const DOUBLE_TAP_TIME := 0.3     # ▼를 이 시간(초) 안에 두 번 누르면 바닥까지 쾅
+const DROP_COOLDOWN := 0.25      # 쾅 한 뒤 이 시간(초) 동안은 ▼를 무시 (다음 블록까지 실수로 떨어뜨리지 않게)
+const SWIPE_MIN_DISTANCE := 110.0  # 판 위에서 아래로 이만큼(px) 이상
+const SWIPE_MAX_TIME := 0.3        # 이 시간(초) 안에 휙 쓸면 쾅
 
 # ─── 손맛 (연출) ───
 const VIBRATION := true          # 폰 진동 쓰기

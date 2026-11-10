@@ -13,7 +13,10 @@
 - `scripts/board.gd` (`Board`): 판 규칙만. 칸 값 = 색(아래 4비트) + 아이템 번호×16. 7개씩 섞은 주머니로 블록을 뽑는다.
 - `scripts/board_view.gd` (`BoardView`): 칸 값 배열을 그린다. 내 판·상대 판 공통. 안개·탈락·목표·방패 표시.
 - `scripts/game.gd`: 게임 화면. 중력·굳히기·조작(여러 손가락 터치를 `_input`에서 직접 처리)·공격·아이템·승패. 화면 요소는 720x1280 `stage` 안에 놓고 가운데 정렬.
-  - 버튼 4개 ◀ ▶ ↻ ▼. ▼는 `DROP_HOLD_TIME`보다 짧게 누르면 바로 떨어뜨리기, 길게 누르면 누르는 동안 내려가기.
+  - 버튼 4개 ◀ ▶ ↻ ▼. ▼는 ◀ ▶ 와 같은 규칙: 한 번 = 한 칸, 꾹 = 쭉(`SOFT_DROP_DELAY` 뒤부터).
+    바닥까지 쾅(되돌릴 수 없음)은 ▼ 톡톡 두 번(`DOUBLE_TAP_TIME`) 또는 판을 아래로 휙(`SWIPE_*`)으로만.
+    첫 번째 톡 뒤에는 ▼ 그림이 금색 ⤓로 바뀌어 "한 번 더 = 쾅"을 알려 준다. 쾅 직후 `DROP_COOLDOWN` 동안 ▼ 무시,
+    ▼를 누른 채 새 블록이 나오면 손을 뗐다 다시 눌러야 내려간다.
   - 떨어질 자리 미리 보기는 꺼 둠(`GHOST_ENABLED`). 줄 레벨 + `SECONDS_PER_LEVEL`초마다 레벨이 올라 빨라진다.
 - `scripts/fx.gd` (`Fx`): 손맛 연출 층(조각 튀기, 번쩍임, 떠오르는 글자, 날아가는 공). 흔들림은 game.gd가 내 판 위치를 흔든다. 진동은 폰에서만.
 - `scripts/sfx.gd` (autoload `Sfx`): 효과음을 처음 켤 때 코드로 합성한다. `assets/sounds/<이름>.wav|.ogg`가 있으면 그 파일을 쓴다. 이름: move, rotate, drop, clear1~4, item_get, item_use, send, hit, block, level, win, lose, danger.

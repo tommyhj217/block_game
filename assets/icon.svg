@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- 앱 아이콘: 어두운 바탕 위에 색 블록이 쌓이고, 위에서 블록 하나가 내려오는 모양 -->
+  <rect width="256" height="256" rx="48" fill="#1f2433"/>
+  <g stroke="#1f2433" stroke-width="6">
+    <!-- 아래에 쌓인 블록 -->
+    <rect x="32" y="176" width="48" height="48" fill="#6f8ff0"/>
+    <rect x="80" y="176" width="48" height="48" fill="#6f8ff0"/>
+    <rect x="32" y="128" width="48" height="48" fill="#6f8ff0"/>
+    <rect x="128" y="176" width="48" height="48" fill="#7ccf7a"/>
+    <rect x="128" y="128" width="48" height="48" fill="#7ccf7a"/>
+    <rect x="176" y="128" width="48" height="48" fill="#7ccf7a"/>
+    <rect x="176" y="176" width="48" height="48" fill="#f2c84b"/>
+    <!-- 내려오는 블록 -->
+    <rect x="56" y="32" width="48" height="48" fill="#ef7f7f"/>
+    <rect x="104" y="32" width="48" height="48" fill="#ef7f7f"/>
+    <rect x="104" y="80" width="48" height="48" fill="#ef7f7f"/>
+    <rect x="152" y="80" width="48" height="48" fill="#ef7f7f"/>
+  </g>
+</svg>

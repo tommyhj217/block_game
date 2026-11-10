@@ -13,12 +13,19 @@
 - `scripts/board.gd` (`Board`): 판 규칙만. 칸 값 = 색(아래 4비트) + 아이템 번호×16. 7개씩 섞은 주머니로 블록을 뽑는다.
 - `scripts/board_view.gd` (`BoardView`): 칸 값 배열을 그린다. 내 판·상대 판 공통. 안개·탈락·목표·방패 표시.
 - `scripts/game.gd`: 게임 화면. 중력·굳히기·조작(여러 손가락 터치를 `_input`에서 직접 처리)·공격·아이템·승패. 화면 요소는 720x1280 `stage` 안에 놓고 가운데 정렬.
+  - 버튼 4개 ◀ ▶ ↻ ▼. ▼는 `DROP_HOLD_TIME`보다 짧게 누르면 바로 떨어뜨리기, 길게 누르면 누르는 동안 내려가기.
+  - 떨어질 자리 미리 보기는 꺼 둠(`GHOST_ENABLED`). 줄 레벨 + `SECONDS_PER_LEVEL`초마다 레벨이 올라 빨라진다.
+- `scripts/fx.gd` (`Fx`): 손맛 연출 층(조각 튀기, 번쩍임, 떠오르는 글자, 날아가는 공). 흔들림은 game.gd가 내 판 위치를 흔든다. 진동은 폰에서만.
+- `scripts/sfx.gd` (autoload `Sfx`): 효과음을 처음 켤 때 코드로 합성한다. `assets/sounds/<이름>.wav|.ogg`가 있으면 그 파일을 쓴다. 이름: move, rotate, drop, clear1~4, item_get, item_use, send, hit, block, level, win, lose, danger.
 - `scripts/lobby.gd`: 이름, 방 만들기, 방 찾기(자동 + 번호 입력), 혼자 연습.
 - `scripts/net.gd` (autoload `Net`): ENet 연결(방장 = 서버, 아이디 1). 방 찾기는 손님이 UDP `FIND`를 브로드캐스트하고 방장이 `ROOM`으로 답장. 게임 중에는 각자 자기 판을 계산하고 판 모양(`_state`, 0.1초 간격 + 1초마다), 공격(`_attack`), 탈락(`_out`)만 주고받는다.
 
 ## 대전 규칙
 - 한 번에 지운 줄 → 방해 줄: `Config.GARBAGE_FOR_LINES` (2줄→1, 3줄→2, 4줄→4). 받을 방해 줄이 있으면 먼저 상쇄하고, 줄을 못 지우고 굳으면 아래에서 올라온다.
-- 아이템은 블록 칸에 붙어 나오고(`ITEM_CHANCE`), 그 줄을 지우면 얻는다(최대 3개). 🧱 방해 줄 3개, ⚡ 빨라져라, 🌫 안개(상대), 🧹 아래 2줄 청소, 🛡 방패(나).
+- 아이템은 블록 칸에 붙어 나오고(`ITEM_CHANCE`, 종류별 `weight`), 그 줄을 지우면 얻는다(최대 3개).
+  - 상대에게: 🧱 방해 줄 3개, ⚡ 빨라져라, 🌫 안개, 🦝 훔치기(상대 첫 아이템을 가져옴, 답장은 `gift` 공격), 💥 모두 공격(모든 상대에게 2줄)
+  - 나에게: 🧹 아래 2줄 청소, 🛡 방패, 🧲 끌어내리기(모든 칸이 떨어져 구멍을 메우고 꽉 찬 줄은 지워져 공격도 됨), 🎁 막대 선물(다음 블록 3개가 막대)
+  - 혼자 연습에서는 나에게 쓰는 아이템만 나온다.
 - 공격 목표는 자동(살아 있는 상대 중 무작위). 상대 판을 누르면 그 상대로 고정, 다시 누르면 자동.
 - 마지막까지 남은 사람이 승리. 방장은 "한 판 더"로 바로 다시 시작한다.
 
@@ -32,4 +39,4 @@ Godot: `%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microso
 ## APK 만들기
 - `--headless --path . --export-debug "Android" build/block_battle.apk` (`build/`는 git에서 무시)
 - 패키지 이름 `com.parks.blockbattle`, 디버그 키 `%APPDATA%\Godot\keystores\debug.keystore`
-- 권한: 인터넷, 네트워크 상태, 와이파이 상태, 멀티캐스트(방 찾기)
+- 권한: 인터넷, 네트워크 상태, 와이파이 상태, 멀티캐스트(방 찾기), 진동

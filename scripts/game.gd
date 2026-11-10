@@ -1,9 +1,10 @@
 # 게임 화면. 내 판을 움직이고(시간, 조작), 상대 판을 보여 주고, 공격·아이템·승패를 처리한다.
-# 블록 규칙은 Board, 그리기는 BoardView, 네트워크는 Net(autoload)에게 맡긴다.
+# 블록 규칙은 Board, 그리기는 BoardView, 연출은 Fx, 소리는 Sfx, 네트워크는 Net에게 맡긴다.
 # 화면은 코드로 만든다(_build_ui). 위치와 크기는 맨 위 상수에서 바꾼다.
 extends Control
 
 # ─── 화면 배치 (기준 화면 720 x 1280) ───
+const STAGE_SIZE := Vector2(720, 1280)
 const OPP_TOP := 12.0          # 상대 판 줄의 위쪽
 const OPP_HEIGHT := 236.0      # 상대 판 줄 높이 (이름 포함)
 const BOARD_RECT := Rect2(40, 262, 380, 760)   # 내 판 (칸 38px)
@@ -11,15 +12,14 @@ const METER_RECT := Rect2(14, 262, 16, 760)    # 방해 줄 대기 막대
 const SIDE_X := 440.0          # 오른쪽 정보 칸 시작 x
 const SIDE_W := 264.0          # 오른쪽 정보 칸 너비
 const PAD_TOP := 1058.0        # 조작 버튼 줄 위쪽
-const PAD_SIZE := Vector2(132, 190)  # 조작 버튼 크기
+const PAD_SIZE := Vector2(165, 190)  # 조작 버튼 크기 (4개)
 const PAD_GAP := 10.0
 const ITEM_PAD_RECT := Rect2(477, 760, 190, 190)  # 아이템 쓰기 버튼
-
-const STAGE_SIZE := Vector2(720, 1280)
 
 var board := Board.new()
 var stage: Control         # 모든 화면 요소를 담는 720x1280 틀
 var view: BoardView
+var fx: Fx                 # 연출 층 (맨 위)
 var preview: PiecePreview
 var meter: ColorRect
 var meter_fill: ColorRect
@@ -35,6 +35,7 @@ var pads := {}
 var _touch_owner := {}   # 손가락 번호 → 누르고 있는 버튼 이름
 var held := {"left": false, "right": false, "down": false}
 var _repeat := {"left": 0.0, "right": 0.0}
+var _down_time := 0.0    # ⬇ 버튼을 누르고 있는 시간 (짧으면 쾅, 길면 천천히 내리기)
 
 # 상대 판: 아이디 → {"view": BoardView, "label": Label, "button": Button}
 var opponents := {}
@@ -42,6 +43,7 @@ var alive := {}          # 아이디 → 아직 살아 있는지 (나 포함)
 var target_id := 0       # 공격 목표 (0이면 자동으로 고름)
 
 var items: Array[String] = []  # 가지고 있는 아이템 (앞에서부터 씀)
+var _items_flying := 0         # 아이템 버튼으로 날아가는 중인 아이템 수 (최대 개수 계산에 포함)
 var pending_garbage := 0       # 받을 예정인 방해 줄 수
 var effects := {"fast": 0.0, "fog": 0.0, "shield": 0.0}  # 남은 효과 시간(초)
 
@@ -56,6 +58,8 @@ var finished := false   # 판 전체가 끝났는지
 var practice := false
 var my_id := 1
 var _toast_time := 0.0
+var _shake_power := 0.0  # 지금 흔들림 크기(px). 시간이 지나면 줄어든다
+var _danger_time := 0.0  # 위험 깜빡임 계산용 시간
 
 
 func _ready() -> void:
@@ -149,10 +153,10 @@ func _build_ui() -> void:
 		slot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		item_slots.append(slot)
 
-	# 조작 버튼 5개: ← → ↻ ⬇ ⤓
-	var names := ["left", "right", "rotate", "down", "drop"]
-	var icons := ["◀", "▶", "↻", "▼", "⤓"]
-	var colors := [Color("#2f3a56"), Color("#2f3a56"), Color("#3d5a4a"), Color("#2f3a56"), Color("#5a3d3d")]
+	# 조작 버튼 4개: ◀ ▶ ↻ ▼ (▼는 짧게 누르면 쾅, 길게 누르면 누르는 동안 내려감)
+	var names := ["left", "right", "rotate", "down"]
+	var icons := ["◀", "▶", "↻", "▼"]
+	var colors := [Color("#2f3a56"), Color("#2f3a56"), Color("#3d5a4a"), Color("#5a3d3d")]
 	for i in range(names.size()):
 		var rect := Rect2(Vector2(14 + i * (PAD_SIZE.x + PAD_GAP), PAD_TOP), PAD_SIZE)
 		_add_pad(names[i], rect, icons[i], colors[i])
@@ -161,8 +165,14 @@ func _build_ui() -> void:
 	toast_label = _make_label("", 48, Vector2(BOARD_RECT.position.x, 520), Vector2(BOARD_RECT.size.x, 120))
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	toast_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	toast_label.add_theme_constant_override("outline_size", 10)
+
+	# 연출 층은 가장 마지막에 넣어서 모든 것 위에 그려지게 한다
+	fx = Fx.new()
+	fx.size = STAGE_SIZE
+	stage.add_child(fx)
 
 	_refresh_side()
 
@@ -176,7 +186,7 @@ func _build_opponents() -> void:
 	if ids.is_empty():
 		var title := _make_label("혼자 연습", 44, Vector2(0, OPP_TOP + 40), Vector2(720, 70))
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var hint := _make_label("🧹 아래 청소  🛡 방패 아이템이 나와요", 24, Vector2(0, OPP_TOP + 120), Vector2(720, 50))
+		var hint := _make_label("🧹 🛡 🧲 🎁 아이템이 나와요", 26, Vector2(0, OPP_TOP + 120), Vector2(720, 50))
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		return
 	# 상대 수에 맞게 가로로 나눈다
@@ -224,6 +234,7 @@ func _add_pad(pad_name: String, rect: Rect2, icon: String, color: Color) -> void
 	var p := Panel.new()
 	p.position = rect.position
 	p.size = rect.size
+	p.pivot_offset = rect.size / 2.0   # 눌렀을 때 가운데를 기준으로 작아지게
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
@@ -241,11 +252,31 @@ func _add_pad(pad_name: String, rect: Rect2, icon: String, color: Color) -> void
 	pads[pad_name] = {"panel": p, "label": l, "style": style, "color": color}
 
 
+# 무대 좌표 도우미: 내 판 칸 가운데 / 내 판 가운데 / 상대 판 가운데 / 아이템 버튼 가운데
+func _my_cell_pos(x: float, y: float) -> Vector2:
+	return BOARD_RECT.position + view.cell_center(x, y)
+
+
+func _my_board_center() -> Vector2:
+	return BOARD_RECT.get_center()
+
+
+func _opp_center(id: int) -> Vector2:
+	if opponents.has(id):
+		var v: BoardView = opponents[id]["view"]
+		return v.position + v.size / 2.0
+	return Vector2(360, OPP_TOP + OPP_HEIGHT / 2.0)
+
+
+func _item_pad_center() -> Vector2:
+	return ITEM_PAD_RECT.get_center()
+
+
 # ═══════════════ 조작 ═══════════════
 
 # _input: 화면의 모든 입력이 먼저 여기로 온다.
 # InputEventScreenTouch(손가락 닿음/뗌)와 InputEventScreenDrag(손가락 끌기)를 직접 보고
-# 손가락 번호(index)마다 어느 버튼을 누르는지 기억한다. 그래서 ◀를 누른 채 ⤓도 누를 수 있다.
+# 손가락 번호(index)마다 어느 버튼을 누르는지 기억한다. 그래서 ◀를 누른 채 ▼도 누를 수 있다.
 func _input(event: InputEvent) -> void:
 	if overlay != null:
 		return  # 결과 화면이 떠 있으면 조작 버튼은 쉰다
@@ -259,15 +290,15 @@ func _input(event: InputEvent) -> void:
 			_pad_up(_touch_owner[event.index])
 			_touch_owner.erase(event.index)
 	elif event is InputEventScreenDrag:
-		# 손가락이 버튼 밖으로 나가면 뗀 것으로 본다 (◀▶▼만)
+		# 손가락이 ◀ ▶ 버튼 밖으로 나가면 뗀 것으로 본다
 		if _touch_owner.has(event.index):
 			var owner_name: String = _touch_owner[event.index]
-			if held.has(owner_name) and _pad_at(event.position) != owner_name:
+			if (owner_name == "left" or owner_name == "right") and _pad_at(event.position) != owner_name:
 				_pad_up(owner_name)
 				_touch_owner.erase(event.index)
 
 
-# PC에서 시험할 때 키보드로도 조작 (←→↓, ↑/X 돌리기, 스페이스 떨어뜨리기, C 아이템)
+# PC에서 시험할 때 키보드로도 조작 (←→, ↓ 버튼과 같음, ↑/X 돌리기, 스페이스 바로 떨어뜨리기, C 아이템)
 func _unhandled_key_input(event: InputEvent) -> void:
 	if overlay != null or not (event is InputEventKey) or event.echo:
 		return
@@ -302,34 +333,47 @@ func _pad_down(pad_name: String) -> void:
 			_repeat["right"] = 0.0
 			_move(1)
 		"down":
+			# 아직 정하지 않음: 손을 빨리 떼면 쾅, 오래 누르면 천천히 내리기
 			held["down"] = true
-			fall_timer = Config.SOFT_DROP_INTERVAL  # 누르자마자 한 칸 내려가게
+			_down_time = 0.0
 		"rotate":
 			if board.try_rotate(1):
+				Sfx.play("rotate")
 				_after_move()
 		"drop":
-			_after_lock(board.hard_drop())
+			_hard_drop()
 		"item":
 			_use_item()
 
 
 func _pad_up(pad_name: String) -> void:
 	_set_pad_look(pad_name, false)
+	if pad_name == "down" and held["down"]:
+		held["down"] = false
+		# 짧게 눌렀다 뗐으면 바닥까지 쾅
+		if _down_time < Config.DROP_HOLD_TIME and not finished and not board.game_over:
+			_hard_drop()
+		return
 	if held.has(pad_name):
 		held[pad_name] = false
 
 
-# 누르는 동안 버튼 색을 밝게
+# 누르는 동안 버튼 색을 밝게 하고, 살짝 작아졌다가 돌아오게 (눌린 느낌)
 func _set_pad_look(pad_name: String, down: bool) -> void:
 	if not pads.has(pad_name):
 		return
 	var info: Dictionary = pads[pad_name]
 	var style: StyleBoxFlat = info["style"]
 	style.bg_color = info["color"].lightened(0.3) if down else info["color"]
+	var p: Panel = info["panel"]
+	# Tween: 값을 정해진 시간 동안 부드럽게 바꿔 주는 도구
+	var tw := create_tween()
+	tw.tween_property(p, "scale", Vector2(0.92, 0.92) if down else Vector2.ONE, 0.06)
 
 
 func _move(dx: int) -> void:
 	if board.try_move(dx, 0):
+		Sfx.play("move", 1.0, -6.0)
 		_after_move()
 
 
@@ -346,11 +390,40 @@ func _on_ground() -> bool:
 	return board.piece_type >= 0 and not board.fits(board.piece_type, board.piece_rot, board.piece_pos + Vector2i(0, 1))
 
 
+# 바닥까지 쾅 떨어뜨린다: 지나간 자리에 잔상, 떨어진 자리에 먼지, 판이 살짝 흔들림
+func _hard_drop() -> void:
+	if board.piece_type < 0:
+		return
+	var before := board.piece_cells()
+	var distance := board.drop_distance()
+	board.piece_pos.y += distance
+	var after := board.piece_cells()
+	var color: Color = Config.CELL_COLORS[board.piece_type + 1]
+	var cs := view.cell_size()
+	for i in range(after.size()):
+		# 지나간 세로 줄에 하얀 잔상
+		var top := _my_cell_pos(before[i].x, maxf(before[i].y, 0)) - Vector2(cs, cs) / 2.0
+		var bottom := _my_cell_pos(after[i].x, after[i].y) + Vector2(cs, cs) / 2.0
+		if bottom.y > top.y:
+			fx.flash(Rect2(top, Vector2(cs, bottom.y - top.y)), Color(1, 1, 1, 0.18), 0.15)
+	# 블록 아래쪽 칸에서 먼지가 튐
+	for c in after:
+		if not after.has(c + Vector2i(0, 1)):
+			fx.burst(_my_cell_pos(c.x, c.y + 0.5), color.lightened(0.4), 3, 160.0, 5.0)
+	if distance > 0:
+		_shake(Config.SHAKE_DROP)
+	Sfx.play("drop")
+	_vibrate(15)
+	_after_lock(board.lock_piece())
+
+
 # ═══════════════ 시간 흐름 ═══════════════
 
 func _process(delta: float) -> void:
 	_update_toast(delta)
 	_update_effects(delta)
+	_update_shake(delta)
+	_update_danger(delta)
 	_send_state_if_needed(delta)
 	if finished or board.game_over or board.piece_type < 0:
 		return
@@ -364,9 +437,15 @@ func _process(delta: float) -> void:
 				_repeat[dir_name] -= Config.MOVE_REPEAT_RATE
 				_move(-1 if dir_name == "left" else 1)
 
+	# ▼ 를 길게 누르고 있으면 빠르게 내려간다
+	var soft := false
+	if held["down"]:
+		_down_time += delta
+		soft = _down_time >= Config.DROP_HOLD_TIME
+
 	# 중력: 시간이 되면 한 칸 내려간다
 	var interval := _fall_interval()
-	if held["down"]:
+	if soft:
 		interval = minf(interval, Config.SOFT_DROP_INTERVAL)
 	fall_timer += delta
 	while fall_timer >= interval:
@@ -382,6 +461,7 @@ func _process(delta: float) -> void:
 	if _on_ground():
 		lock_timer += delta
 		if lock_timer >= Config.LOCK_DELAY:
+			Sfx.play("drop", 1.4, -8.0)
 			_after_lock(board.lock_piece())
 	else:
 		lock_timer = 0.0
@@ -406,8 +486,13 @@ func _update_level(delta: float) -> void:
 	var before := _level()
 	play_time += delta
 	if _level() > before:
-		_show_toast("빨라진다! 레벨 %d" % (_level() + 1))
-		_refresh_side()
+		_level_up_fx()
+
+
+func _level_up_fx() -> void:
+	fx.float_text("빨라진다! ⏩", _my_board_center() - Vector2(0, 200), Color("#ffd84a"), 52)
+	Sfx.play("level")
+	_refresh_side()
 
 
 func _update_effects(delta: float) -> void:
@@ -421,6 +506,44 @@ func _update_effects(delta: float) -> void:
 		view.shielded = effects["shield"] > 0.0
 		view.queue_redraw()
 		_refresh_effects()
+
+
+# 흔들림: 판을 무작위로 조금씩 옮기고, 흔들림 크기는 빠르게 줄어든다
+func _shake(power: float) -> void:
+	_shake_power = maxf(_shake_power, power)
+
+
+func _update_shake(delta: float) -> void:
+	if _shake_power <= 0.1:
+		if view.position != BOARD_RECT.position:
+			view.position = BOARD_RECT.position
+		_shake_power = 0.0
+		return
+	view.position = BOARD_RECT.position + Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake_power
+	_shake_power = lerpf(_shake_power, 0.0, minf(1.0, delta * 14.0))
+
+
+# 꼭대기 가까이 찼으면 판 테두리가 빨갛게 깜빡이고 작게 삐 소리
+func _update_danger(delta: float) -> void:
+	var in_danger := not board.game_over and board.stack_height() >= Config.ROWS - Config.DANGER_ROWS
+	if in_danger:
+		var before := _danger_time
+		_danger_time += delta
+		view.danger = 0.45 + 0.45 * sin(_danger_time * 7.0)
+		# 깜빡임 한 번(약 0.9초)마다 삐
+		if int(before / 0.9) != int(_danger_time / 0.9):
+			Sfx.play("danger")
+		view.queue_redraw()
+	elif view.danger > 0.0:
+		view.danger = 0.0
+		_danger_time = 0.0
+		view.queue_redraw()
+
+
+func _vibrate(ms: int) -> void:
+	# 폰에서만 진동 (PC에서는 아무 일도 안 함)
+	if Config.VIBRATION and OS.has_feature("mobile"):
+		Input.vibrate_handheld(ms)
 
 
 # 내 판이 바뀌었으면 상대에게 보낸다. 바뀌지 않아도 1초마다 한 번은 보낸다(빠진 신호 대비).
@@ -439,15 +562,23 @@ func _send_state_if_needed(delta: float) -> void:
 # ═══════════════ 블록이 굳은 뒤 ═══════════════
 
 func _after_lock(result: Dictionary) -> void:
+	var lines := _handle_clear(result)
+	if lines == 0 and pending_garbage > 0:
+		# 줄을 못 지웠으면 기다리던 방해 줄이 올라온다
+		_raise_garbage()
+	state_dirty = true
+	if board.game_over:
+		_i_lost()
+		return
+	_spawn_next()
+
+
+# 줄을 지운 결과를 처리한다: 연출, 아이템 얻기, 공격. 지운 줄 수를 돌려준다.
+# (블록이 굳을 때와 🧲 끌어내리기 아이템을 쓸 때 같이 쓴다)
+func _handle_clear(result: Dictionary) -> int:
 	var lines: int = result["lines"]
-	# 지운 줄에 있던 아이템 얻기
-	for key in result["items"]:
-		if items.size() < Config.ITEM_MAX:
-			items.append(key)
-			_show_toast("%s 얻었다!" % Config.ITEMS[key]["icon"])
 	if lines > 0:
-		if lines >= 2:
-			_show_toast("%d줄!" % lines)
+		_clear_fx(result)
 		# 지운 만큼 공격. 받을 예정인 방해 줄이 있으면 먼저 그만큼 없앤다(막기).
 		var send: int = Config.GARBAGE_FOR_LINES[mini(lines, 4)]
 		var cancel := mini(pending_garbage, send)
@@ -455,15 +586,54 @@ func _after_lock(result: Dictionary) -> void:
 		send -= cancel
 		if send > 0 and not practice:
 			_send_attack("garbage", send)
-	elif pending_garbage > 0:
-		# 줄을 못 지웠으면 기다리던 방해 줄이 올라온다
-		board.add_garbage(pending_garbage, board.random_hole())
-		pending_garbage = 0
-	state_dirty = true
-	if board.game_over:
-		_i_lost()
-		return
-	_spawn_next()
+	# 지운 줄에 있던 아이템은 아이템 버튼으로 날아가서 들어간다
+	for i in range(result["items"].size()):
+		var key: String = result["items"][i]
+		var cell: Vector2i = result["item_cells"][i]
+		_fly_item_to_pad(key, _my_cell_pos(cell.x, cell.y))
+	return lines
+
+
+# 줄 지우기 연출: 줄이 번쩍이고, 칸 조각이 튀고, 지운 줄 수만큼 크게 흔들리고 소리가 높아진다
+func _clear_fx(result: Dictionary) -> void:
+	var lines: int = result["lines"]
+	var cs := view.cell_size()
+	for r in range(result["rows"].size()):
+		var y: int = result["rows"][r]
+		var row: PackedByteArray = result["row_cells"][r]
+		var left := _my_cell_pos(0, y) - Vector2(cs, cs) / 2.0
+		fx.flash(Rect2(left, Vector2(cs * Config.COLS, cs)), Color(1, 1, 1, 0.9), 0.3)
+		for x in range(Config.COLS):
+			var color: Color = Config.CELL_COLORS[Board.color_of(row[x])]
+			fx.burst(_my_cell_pos(x, y), color, 3 if lines < 4 else 5, 300.0 + lines * 60.0, 9.0)
+	var center_y: float = _my_cell_pos(0, result["rows"][0]).y
+	match lines:
+		1:
+			pass
+		2:
+			fx.float_text("2줄!", Vector2(_my_board_center().x, center_y), Color.WHITE, 60)
+		3:
+			fx.float_text("3줄!!", Vector2(_my_board_center().x, center_y), Color("#7fe0ff"), 70)
+		_:
+			# 4줄: 판 전체가 번쩍이고 금색 큰 글자
+			fx.flash(Rect2(BOARD_RECT.position, BOARD_RECT.size), Color(1, 0.9, 0.5, 0.35), 0.4)
+			fx.float_text("와르르!", Vector2(_my_board_center().x, center_y), Color("#ffd84a"), 88, 1.2)
+	Sfx.play("clear%d" % mini(lines, 4))
+	_shake(Config.SHAKE_PER_LINE * lines)
+	_vibrate(25 * lines)
+
+
+# 기다리던 방해 줄이 아래에서 올라온다
+func _raise_garbage() -> void:
+	var n := pending_garbage
+	pending_garbage = 0
+	board.add_garbage(n, board.random_hole())
+	var cs := view.cell_size()
+	var top := _my_cell_pos(0, Config.ROWS - n) - Vector2(cs, cs) / 2.0
+	fx.flash(Rect2(top, Vector2(cs * Config.COLS, cs * n)), Color(1, 0.3, 0.3, 0.5), 0.35)
+	_shake(Config.SHAKE_HIT)
+	Sfx.play("hit")
+	_vibrate(60)
 
 
 func _spawn_next() -> void:
@@ -484,54 +654,126 @@ func _spawn_next() -> void:
 func _pick_target() -> int:
 	if target_id != 0 and alive.get(target_id, false):
 		return target_id
-	var list := []
-	for id in alive:
-		if id != my_id and alive[id]:
-			list.append(id)
+	var list := _alive_opponents()
 	if list.is_empty():
 		return 0
 	return list[randi_range(0, list.size() - 1)]
 
 
-func _send_attack(kind: String, amount: int) -> void:
-	var t := _pick_target()
+func _alive_opponents() -> Array:
+	var list := []
+	for id in alive:
+		if id != my_id and alive[id]:
+			list.append(id)
+	return list
+
+
+# 공격을 보낸다. target을 0으로 두면 자동으로 고른다. 공이 상대 판으로 날아가는 연출도 한다.
+func _send_attack(kind: String, amount: int, target: int = 0) -> void:
+	var t := target if target != 0 else _pick_target()
 	if t == 0:
 		return
 	Net.send_attack(t, kind, amount)
-	var icon: String = "🧱" if kind == "garbage" else Config.ITEMS[kind]["icon"]
-	_show_toast("%s → %s" % [icon, Net.name_of(t)])
+	var icon: String = "" if kind == "garbage" else Config.ITEMS[kind]["icon"]
+	var color := Color("#ff8a5b") if kind == "garbage" else Color("#c58bff")
+	fx.shoot(_my_board_center() - Vector2(0, 300), _opp_center(t), color, icon)
+	Sfx.play("send")
+
+
+# 얻은 아이템이 아이템 버튼으로 날아가서 들어간다
+func _fly_item_to_pad(key: String, from: Vector2) -> void:
+	if items.size() + _items_flying >= Config.ITEM_MAX:
+		return  # 가득 차서 못 받음
+	_items_flying += 1
+	fx.shoot(from, _item_pad_center(), Color("#fff3a0"), Config.ITEMS[key]["icon"], 0.5,
+			func():
+				_items_flying -= 1
+				if items.size() < Config.ITEM_MAX:
+					items.append(key)
+				Sfx.play("item_get")
+				_refresh_side())
 
 
 func _use_item() -> void:
 	if items.is_empty():
 		return
 	var key: String = items.pop_front()
+	Sfx.play("item_use")
 	match key:
 		"garbage":
 			_send_attack("garbage", Config.ITEM_GARBAGE_LINES)
-		"fast", "fog":
+		"fast", "fog", "steal":
 			_send_attack(key, 0)
+		"all":
+			# 💥 살아 있는 모든 상대에게 방해 줄
+			for id in _alive_opponents():
+				_send_attack("garbage", Config.ITEM_ALL_LINES, id)
+			fx.float_text("💥 모두 공격!", _my_board_center() - Vector2(0, 200), Color("#ff8a5b"), 56)
 		"sweep":
+			# 🧹 맨 아래 줄들이 터지며 사라진다
+			var cs := view.cell_size()
+			for i in range(Config.ITEM_SWEEP_LINES):
+				var y := Config.ROWS - 1 - i
+				for x in range(Config.COLS):
+					var v := board.get_cell(x, y)
+					if v != 0:
+						fx.burst(_my_cell_pos(x, y), Config.CELL_COLORS[Board.color_of(v)], 3)
+			var top := _my_cell_pos(0, Config.ROWS - Config.ITEM_SWEEP_LINES) - Vector2(cs, cs) / 2.0
+			fx.flash(Rect2(top, Vector2(cs * Config.COLS, cs * Config.ITEM_SWEEP_LINES)), Color(1, 1, 1, 0.8), 0.3)
 			board.clear_bottom(Config.ITEM_SWEEP_LINES)
-			_show_toast("🧹 깨끗!")
+			fx.float_text("🧹 깨끗!", _my_board_center(), Color.WHITE, 56)
+			_shake(6.0)
 		"shield":
 			effects["shield"] = Config.ITEM_DURATION
 			pending_garbage = 0
 			view.shielded = true
-			_show_toast("🛡 방패!")
+			fx.flash(Rect2(BOARD_RECT.position, BOARD_RECT.size), Color(0.4, 0.75, 1, 0.35), 0.4)
+			fx.float_text("🛡 방패!", _my_board_center(), Color("#9fd8ff"), 56)
+		"magnet":
+			# 🧲 모든 칸이 아래로 떨어져 구멍을 메우고, 꽉 찬 줄은 지워진다(공격도 됨)
+			fx.flash(Rect2(BOARD_RECT.position, BOARD_RECT.size), Color(0.6, 0.6, 1, 0.3), 0.3)
+			var result := board.collapse()
+			if result["lines"] == 0:
+				fx.float_text("🧲 착!", _my_board_center(), Color.WHITE, 56)
+			_shake(8.0)
+			_handle_clear(result)
+		"bars":
+			# 🎁 다음 블록 몇 개가 막대로 바뀐다
+			board.set_next_type(0, Config.ITEM_BARS_COUNT)
+			fx.float_text("🎁 막대 %d개!" % Config.ITEM_BARS_COUNT, _my_board_center(), Color("#7fe0ff"), 56)
+			fx.burst(preview.position + preview.size / 2.0, Config.CELL_COLORS[1], 16)
 	state_dirty = true
 	_refresh_board()
 	_refresh_side()
 
 
-# 상대가 나를 공격했다
+# 상대가 나에게 무언가 보냈다
 func _on_attacked(from_id: int, kind: String, amount: int) -> void:
 	if finished or board.game_over:
 		return
+	var who := Net.name_of(from_id)
+	# 🦝 훔치기의 답장(선물): 방패와 상관없이 받는다
+	if kind == "gift":
+		if amount > 0:
+			var key := Board.item_key(amount)
+			_fly_item_to_pad(key, _opp_center(from_id))
+			_show_toast("🦝 %s 가져왔다!" % Config.ITEMS[key]["icon"])
+		else:
+			_show_toast("🦝 빈손...")
+		return
 	if effects["shield"] > 0.0:
 		_show_toast("🛡 막았다!")
+		Sfx.play("block")
+		if kind == "steal":
+			Net.send_attack(from_id, "gift", 0)
 		return
-	var who := Net.name_of(from_id)
+	# 공이 상대 판에서 내 판으로 날아온다
+	var color := Color("#ff8a5b") if kind == "garbage" else Color("#c58bff")
+	var icon: String = "" if kind == "garbage" else Config.ITEMS[kind]["icon"]
+	fx.shoot(_opp_center(from_id), _my_board_center() - Vector2(0, 300), color, icon, 0.4,
+			func():
+				_shake(4.0)
+				Sfx.play("hit", 1.3, -6.0))
 	match kind:
 		"garbage":
 			pending_garbage = mini(pending_garbage + amount, Config.GARBAGE_MAX_PENDING)
@@ -543,6 +785,17 @@ func _on_attacked(from_id: int, kind: String, amount: int) -> void:
 			effects["fog"] = Config.ITEM_DURATION
 			view.fog = true
 			_show_toast("%s의 🌫 안개!" % who)
+		"steal":
+			# 내 첫 번째 아이템을 빼앗긴다 (없으면 빈손 답장)
+			if items.is_empty():
+				Net.send_attack(from_id, "gift", 0)
+				_show_toast("%s의 🦝 (뺏길 게 없어요)" % who)
+			else:
+				var key: String = items.pop_front()
+				Net.send_attack(from_id, "gift", Config.ITEM_ORDER.find(key) + 1)
+				fx.shoot(_item_pad_center(), _opp_center(from_id), Color("#fff3a0"), Config.ITEMS[key]["icon"])
+				_show_toast("%s의 🦝 %s 뺏겼다!" % [who, Config.ITEMS[key]["icon"]])
+	_vibrate(30)
 	_refresh_side()
 
 
@@ -570,6 +823,7 @@ func _on_player_out(id: int) -> void:
 		target_id = 0
 	if id != my_id and opponents.has(id):
 		_show_toast("%s 탈락" % Net.name_of(id))
+		fx.burst(_opp_center(id), Color("#8a8f99"), 20, 250.0)
 	_refresh_opponents()
 	_refresh_side()
 	_check_end()
@@ -587,7 +841,11 @@ func _i_lost() -> void:
 	for key in held:
 		held[key] = false
 	view.dimmed = true
+	view.danger = 0.0
 	_refresh_board()
+	_shake(16.0)
+	Sfx.play("lose")
+	_vibrate(200)
 	if practice:
 		finished = true
 		_show_result("꽉 찼어요!\n%d줄 지웠어요" % board.lines_total)
@@ -610,7 +868,15 @@ func _check_end() -> void:
 	finished = true
 	var text := "무승부!"
 	if left.size() == 1:
-		text = "🏆 이겼어요!" if left[0] == my_id else "🏆 %s 승리!" % Net.name_of(left[0])
+		if left[0] == my_id:
+			text = "🏆 이겼어요!"
+			Sfx.play("win")
+			# 이긴 사람 판 위로 축하 조각
+			for i in range(6):
+				fx.burst(_my_board_center() + Vector2(randf_range(-150, 150), randf_range(-250, 100)),
+						Config.CELL_COLORS[randi_range(1, 7)], 14, 420.0)
+		else:
+			text = "🏆 %s 승리!" % Net.name_of(left[0])
 	# 이긴 사람의 마지막 판 모양을 모두에게 한 번 더 보낸다
 	Net.send_state(board.snapshot())
 	_show_result(text)
@@ -619,7 +885,6 @@ func _check_end() -> void:
 # ═══════════════ 화면 갱신 ═══════════════
 
 func _refresh_board() -> void:
-	view.set_cells(board.snapshot(false))
 	view.active = []
 	view.ghost = []
 	if board.piece_type >= 0 and not board.game_over:
@@ -627,8 +892,7 @@ func _refresh_board() -> void:
 		if Config.GHOST_ENABLED:
 			# 떨어질 자리 미리 보기 (설정에서 켰을 때만)
 			view.ghost = board.cells_at(board.piece_type, board.piece_rot, board.piece_pos + Vector2i(0, board.drop_distance()))
-		view.set_cells(board.snapshot(true))
-	view.queue_redraw()
+	view.set_cells(board.snapshot(true))
 
 
 func _refresh_side() -> void:
@@ -720,6 +984,12 @@ func _show_result(text: String) -> void:
 			wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			box.add_child(wait)
 		box.add_child(_result_button("방으로", _go_lobby))
+
+	# 결과 상자가 톡 튀어나오게
+	box.pivot_offset = Vector2(260, 150)
+	box.scale = Vector2(0.6, 0.6)
+	var tw := create_tween()
+	tw.tween_property(box, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _result_button(text: String, callback: Callable) -> Button:

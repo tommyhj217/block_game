@@ -24,6 +24,14 @@ const LOCK_RESET_LIMIT := 15   # 바닥에서 움직여 굳는 시간을 다시 
 # ─── 버튼을 누르고 있을 때 반복 이동 ───
 const MOVE_REPEAT_DELAY := 0.17  # 처음 누르고 반복이 시작되기까지(초)
 const MOVE_REPEAT_RATE := 0.05   # 반복할 때 한 칸 움직이는 간격(초)
+const DROP_HOLD_TIME := 0.18     # ⬇ 버튼을 이 시간(초)보다 짧게 누르면 바로 떨어뜨리기, 길게 누르면 누르는 동안 내려가기
+
+# ─── 손맛 (연출) ───
+const VIBRATION := true          # 폰 진동 쓰기
+const DANGER_ROWS := 5           # 블록이 꼭대기에서 이 줄 수 안까지 차면 판 테두리가 빨갛게 깜빡임
+const SHAKE_DROP := 5.0          # 바닥에 쾅 떨어뜨릴 때 흔들림 크기(px)
+const SHAKE_PER_LINE := 5.0      # 줄 하나 지울 때마다 더해지는 흔들림(px)
+const SHAKE_HIT := 12.0          # 방해 줄이 올라올 때 흔들림(px)
 
 # ─── 대전 ───
 # 한 번에 지운 줄 수 → 상대에게 보내는 방해 줄 수. (인덱스 = 지운 줄 수)
@@ -37,18 +45,26 @@ const ITEM_CHANCE := 0.22   # 새 블록에 아이템이 붙어 나올 확률 (0
 const ITEM_MAX := 3         # 한 번에 들고 있을 수 있는 아이템 수
 const ITEM_DURATION := 8.0  # 빠르게·안개·방패가 이어지는 시간(초)
 const ITEM_GARBAGE_LINES := 3  # 🧱 아이템이 보내는 방해 줄 수
+const ITEM_ALL_LINES := 2      # 💥 아이템이 모든 상대에게 보내는 방해 줄 수
 const ITEM_SWEEP_LINES := 2    # 🧹 아이템이 지우는 내 아래 줄 수
+const ITEM_BARS_COUNT := 3     # 🎁 아이템을 쓰면 다음 블록 몇 개가 막대가 되는지
 const FAST_MULTIPLIER := 0.3   # ⚡ 아이템을 맞으면 떨어지는 시간이 이만큼으로 줄어듦
 
-# 아이템 목록. 칸에 저장할 때는 1부터 시작하는 번호(ITEM_ORDER에서의 위치 + 1)를 쓴다.
+# 아이템 목록. 칸에 저장할 때는 1부터 시작하는 번호(ITEM_ORDER에서의 위치 + 1)를 쓴다. (최대 15개)
 # target: true면 상대에게 쓰는 아이템, false면 나에게 쓰는 아이템.
-const ITEM_ORDER := ["garbage", "fast", "fog", "sweep", "shield"]
+# weight: 나오는 비율. 클수록 자주 나온다.
+const ITEM_ORDER := ["garbage", "fast", "fog", "sweep", "shield", "magnet", "bars", "steal", "all"]
 const ITEMS := {
-	"garbage": {"icon": "🧱", "name": "방해 줄", "target": true},
-	"fast":    {"icon": "⚡", "name": "빨라져라", "target": true},
-	"fog":     {"icon": "🌫", "name": "안개", "target": true},
-	"sweep":   {"icon": "🧹", "name": "아래 청소", "target": false},
-	"shield":  {"icon": "🛡", "name": "방패", "target": false},
+	"garbage": {"icon": "🧱", "name": "방해 줄", "target": true, "weight": 3},
+	"fast":    {"icon": "⚡", "name": "빨라져라", "target": true, "weight": 2},
+	"fog":     {"icon": "🌫", "name": "안개", "target": true, "weight": 2},
+	"sweep":   {"icon": "🧹", "name": "아래 청소", "target": false, "weight": 2},
+	"shield":  {"icon": "🛡", "name": "방패", "target": false, "weight": 2},
+	# 아래는 새 아이템
+	"magnet":  {"icon": "🧲", "name": "끌어내리기", "target": false, "weight": 2},  # 내 칸이 모두 아래로 떨어져 구멍이 메워짐
+	"bars":    {"icon": "🎁", "name": "막대 선물", "target": false, "weight": 2},   # 다음 블록 3개가 막대
+	"steal":   {"icon": "🦝", "name": "훔치기", "target": true, "weight": 2},       # 상대 아이템 하나를 가져옴
+	"all":     {"icon": "💥", "name": "모두 공격", "target": true, "weight": 1},     # 모든 상대에게 방해 줄
 }
 
 # ─── 블록 색 (칸 번호 1~7은 블록 종류, 8은 방해 줄) ───

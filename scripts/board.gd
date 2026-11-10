@@ -158,13 +158,26 @@ func spawn() -> bool:
 	# 아이템이 붙을지 정한다
 	piece_item = 0
 	if not item_pool.is_empty() and _rng.randf() < item_chance:
-		var key: String = item_pool[_rng.randi_range(0, item_pool.size() - 1)]
+		var key := _pick_item()
 		piece_item = Config.ITEM_ORDER.find(key) + 1
 		piece_item_cell = _rng.randi_range(0, 3)
 	if not fits(piece_type, piece_rot, piece_pos):
 		game_over = true
 		return false
 	return true
+
+
+# 아이템 하나를 고른다. Config.ITEMS의 "weight"가 클수록 자주 나온다.
+func _pick_item() -> String:
+	var total := 0
+	for key in item_pool:
+		total += int(Config.ITEMS[key]["weight"])
+	var r := _rng.randi_range(1, total)
+	for key in item_pool:
+		r -= int(Config.ITEMS[key]["weight"])
+		if r <= 0:
+			return key
+	return item_pool[0]
 
 
 # 블록을 (dx, dy)만큼 옮긴다. 막히면 그대로 두고 false.
@@ -208,7 +221,7 @@ func hard_drop() -> Dictionary:
 # 블록을 판에 굳히고 꽉 찬 줄을 지운다.
 # 돌려주는 값: {"lines": 지운 줄 수, "items": 얻은 아이템 이름표 배열}
 func lock_piece() -> Dictionary:
-	var result := {"lines": 0, "items": []}
+	var result := {"lines": 0, "items": [], "item_cells": [], "rows": [], "row_cells": []}
 	if piece_type < 0:
 		return result
 	var list := piece_cells()
@@ -227,26 +240,40 @@ func lock_piece() -> Dictionary:
 	return result
 
 
+# 꽉 찬 줄을 모두 지운다. result에 다음을 채운다.
+#   "lines": 지운 줄 수, "items": 얻은 아이템 이름표, "item_cells": 그 아이템이 있던 칸 위치,
+#   "rows": 지운 줄의 y(지우기 전 기준), "row_cells": 지운 줄의 칸 값들 (터지는 연출에 씀)
 func _clear_full_lines(result: Dictionary) -> void:
-	var y := Config.ROWS - 1
-	while y >= 0:
+	for key in ["items", "item_cells", "rows", "row_cells"]:
+		if not result.has(key):
+			result[key] = []
+	if not result.has("lines"):
+		result["lines"] = 0
+	# 먼저 꽉 찬 줄을 모두 찾는다 (위에서 아래 순서)
+	var full_rows := []
+	for y in range(Config.ROWS):
 		var full := true
 		for x in range(Config.COLS):
 			if get_cell(x, y) == 0:
 				full = false
 				break
 		if full:
-			# 이 줄에 있던 아이템을 얻는다
-			for x in range(Config.COLS):
-				var item := item_of(get_cell(x, y))
-				if item > 0:
-					result["items"].append(item_key(item))
-			_remove_row(y)
-			result["lines"] += 1
-			lines_total += 1
-			# 위 줄이 내려왔으니 같은 y를 한 번 더 검사한다
-		else:
-			y -= 1
+			full_rows.append(y)
+	# 위쪽 줄부터 지운다. 위 줄을 지우면 그 위만 내려오므로 아래쪽 줄 번호는 그대로다.
+	for y in full_rows:
+		var row := PackedByteArray()
+		for x in range(Config.COLS):
+			var value := get_cell(x, y)
+			row.append(value)
+			var item := item_of(value)
+			if item > 0:
+				result["items"].append(item_key(item))
+				result["item_cells"].append(Vector2i(x, y))
+		result["rows"].append(y)
+		result["row_cells"].append(row)
+		_remove_row(y)
+		result["lines"] += 1
+		lines_total += 1
 
 
 # y줄을 지우고 그 위 줄들을 한 칸씩 내린다. 맨 윗줄은 빈 줄이 된다.
@@ -280,11 +307,7 @@ func add_garbage(n: int, hole: int) -> void:
 		for x in range(Config.COLS):
 			set_cell(x, y, 0 if x == hole else Config.GARBAGE_COLOR_INDEX)
 	# 떨어지던 블록이 방해 줄과 겹치면 겹치지 않을 때까지 위로 올린다
-	if piece_type >= 0:
-		for i in range(n + 1):
-			if fits(piece_type, piece_rot, piece_pos):
-				break
-			piece_pos.y -= 1
+	_push_piece_up(n)
 
 
 # 방해 줄 구멍 위치를 이 판의 난수로 정한다.
@@ -296,6 +319,42 @@ func random_hole() -> int:
 func clear_bottom(n: int) -> void:
 	for i in range(n):
 		_remove_row(Config.ROWS - 1)
+
+
+# 🧲 끌어내리기 아이템: 모든 칸이 아래 빈칸으로 우수수 떨어져 구멍을 메운다.
+# 그 뒤 꽉 찬 줄은 지워지고, 결과는 lock_piece()와 같은 모양으로 돌려준다.
+func collapse() -> Dictionary:
+	for x in range(Config.COLS):
+		# 이 세로줄의 칸들을 아래에서부터 모은다
+		var stack := []
+		for y in range(Config.ROWS - 1, -1, -1):
+			var v := get_cell(x, y)
+			if v != 0:
+				stack.append(v)
+		# 아래부터 다시 채우고 나머지는 비운다
+		for i in range(Config.ROWS):
+			var y := Config.ROWS - 1 - i
+			set_cell(x, y, stack[i] if i < stack.size() else 0)
+	var result := {"lines": 0}
+	_clear_full_lines(result)
+	_push_piece_up(Config.ROWS)
+	return result
+
+
+# 🎁 막대 선물 아이템: 다음에 나올 블록 n개를 type 모양으로 바꾼다.
+func set_next_type(type: int, n: int) -> void:
+	for i in range(mini(n, next_queue.size())):
+		next_queue[i] = type
+
+
+# 떨어지던 블록이 칸과 겹치면 겹치지 않을 때까지 위로 올린다
+func _push_piece_up(limit: int) -> void:
+	if piece_type < 0:
+		return
+	for i in range(limit + 1):
+		if fits(piece_type, piece_rot, piece_pos):
+			return
+		piece_pos.y -= 1
 
 
 # 지금 레벨 (지운 줄 수에 따라 0부터 오름)

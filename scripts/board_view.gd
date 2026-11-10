@@ -13,6 +13,19 @@ var fog := false                    # 🌫 안개를 맞았을 때 쌓인 블록
 var dimmed := false                 # 탈락한 판은 어둡게
 var highlighted := false            # 공격 목표로 고른 상대 판은 노란 테두리
 var shielded := false               # 🛡 방패 중이면 파란 테두리
+var danger := 0.0                   # 0~1. 꼭대기까지 거의 찼을 때 빨간 테두리 진하기
+
+
+# 판의 왼쪽 위 모서리 위치 (이 노드 기준). 판은 영역 가운데에 놓인다.
+func board_origin() -> Vector2:
+	var cs := cell_size()
+	return ((size - Vector2(cs * Config.COLS, cs * Config.ROWS)) / 2.0).floor()
+
+
+# 칸 (x, y)의 가운데 위치 (이 노드 기준). 연출을 칸 위치에 띄울 때 쓴다.
+func cell_center(x: float, y: float) -> Vector2:
+	var cs := cell_size()
+	return board_origin() + Vector2(x + 0.5, y + 0.5) * cs
 
 
 func _ready() -> void:
@@ -82,6 +95,10 @@ func _draw() -> void:
 		border = Color("#6cc6ff")
 		width = 6.0
 	draw_rect(Rect2(origin, board_size).grow(width / 2.0), border, false, width)
+	# 위험: 꼭대기 가까이 찼을 때 빨간 테두리와 위쪽 붉은 빛
+	if danger > 0.0:
+		draw_rect(Rect2(origin, board_size).grow(4), Color(1, 0.25, 0.25, danger), false, 8.0)
+		draw_rect(Rect2(origin, Vector2(board_size.x, cs * 4)), Color(1, 0.2, 0.2, danger * 0.18))
 
 	# 탈락한 판은 어둡게 덮는다
 	if dimmed:

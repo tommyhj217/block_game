@@ -25,8 +25,13 @@ signal state_received(id: int, data: PackedByteArray)    # 상대 판 모양이 
 signal attacked(from_id: int, kind: String, amount: int) # 공격을 받음
 signal player_out(id: int)                               # 누군가 꽉 차서 탈락함
 signal player_left(id: int)                              # 누군가 연결이 끊김
+signal score_received(id: int, score: int)               # 숨은그림 대결: 누군가 찾은 개수가 바뀜
+signal winner_declared(id: int)                          # 숨은그림 대결: 방장이 이긴 사람을 정함
 
 const GAME_SCENE := "res://scenes/game.tscn"
+const HIDDEN_SCENE := "res://scenes/hidden.tscn"
+# 놀이 종류 → 화면
+const MODE_SCENES := {"blocks": GAME_SCENE, "hidden": HIDDEN_SCENE}
 const LOBBY_SCENE := "res://scenes/lobby.tscn"
 const SETTINGS_PATH := "user://settings.cfg"
 const JOIN_TIMEOUT := 6.0   # 이 시간(초) 안에 연결이 안 되면 실패로 본다
@@ -35,6 +40,7 @@ var my_name := ""
 var players := {}         # 방에 있는 사람들 {아이디: 이름}. 방장의 아이디는 항상 1
 var match_players := {}   # 지금 판을 시작할 때 있던 사람들 {아이디: 이름}
 var match_seed := 0       # 판마다 바뀌는 난수 씨앗
+var match_mode := "blocks"  # 지금 판의 놀이 종류: "blocks"(블록 대전), "hidden"(숨은그림 찾기)
 var in_room := false
 var is_host := false
 var last_message := ""    # 로비로 돌아갔을 때 보여 줄 안내 (예: 방이 닫혔어요)
@@ -271,26 +277,28 @@ func _set_players(list: Dictionary) -> void:
 
 # ─── 판 시작 ───
 
-# 방장이 "시작"을 누르면 모두에게 게임 화면을 연다.
-func start_match() -> void:
+# 방장이 "시작"을 누르면 모두에게 게임 화면을 연다. mode: "blocks" 또는 "hidden"
+func start_match(mode: String = "blocks") -> void:
 	if not is_host or players.size() < 2:
 		return
-	_begin.rpc(randi(), players)
+	_begin.rpc(randi(), players, mode)
 
 
 @rpc("authority", "reliable", "call_local")
-func _begin(seed_value: int, list: Dictionary) -> void:
+func _begin(seed_value: int, list: Dictionary, mode: String) -> void:
 	match_seed = seed_value
 	match_players = list
-	get_tree().change_scene_to_file(GAME_SCENE)
+	match_mode = mode if MODE_SCENES.has(mode) else "blocks"
+	get_tree().change_scene_to_file(MODE_SCENES[match_mode])
 
 
-# 혼자 연습: 연결 없이 게임 화면을 연다.
-func start_practice() -> void:
+# 혼자 하기: 연결 없이 게임 화면을 연다.
+func start_practice(mode: String = "blocks") -> void:
 	leave()
 	match_seed = randi()
 	match_players = {my_id(): my_name}
-	get_tree().change_scene_to_file(GAME_SCENE)
+	match_mode = mode
+	get_tree().change_scene_to_file(MODE_SCENES[mode])
 
 
 func is_practice() -> bool:
@@ -338,3 +346,29 @@ func send_out() -> void:
 @rpc("any_peer", "reliable", "call_local")
 func _out(id: int) -> void:
 	player_out.emit(id)
+
+
+# ─── 숨은그림 대결 ───
+
+# 내가 찾은 개수를 모두에게 알린다 (나에게도 실행됨)
+func send_score(score: int) -> void:
+	if in_room:
+		_score.rpc(my_id(), score)
+	else:
+		score_received.emit(my_id(), score)
+
+
+@rpc("any_peer", "reliable", "call_local")
+func _score(id: int, score: int) -> void:
+	score_received.emit(id, score)
+
+
+# 방장만: 이긴 사람을 정해서 모두에게 알린다. (동시에 끝나도 방장이 먼저 받은 사람 하나로 정해짐)
+func declare_winner(id: int) -> void:
+	if is_host:
+		_winner.rpc(id)
+
+
+@rpc("authority", "reliable", "call_local")
+func _winner(id: int) -> void:
+	winner_declared.emit(id)

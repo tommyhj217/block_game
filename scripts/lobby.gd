@@ -9,6 +9,7 @@ var _name_edit: LineEdit
 var _host_info: Label
 var _host_list: Label
 var _start_button: Button
+var _hidden_start_button: Button
 var _guest_list: Label
 var _room_box: VBoxContainer  # 찾은 방 버튼들이 들어가는 곳
 var _ip_edit: LineEdit
@@ -107,10 +108,7 @@ func _show(page_name: String) -> void:
 
 func _build_main() -> void:
 	var box := _new_page("main")
-	_title(box, "와르르\n블록 대전", 84)
-	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 30)
-	box.add_child(gap)
+	_title(box, "와르르\n블록 대전", 72)
 
 	var name_row := HBoxContainer.new()
 	var name_label := Label.new()
@@ -128,7 +126,8 @@ func _build_main() -> void:
 
 	_button(box, "🏠 방 만들기", _on_host_pressed, Color("#3d6a4f"))
 	_button(box, "🔍 방 찾기", _on_search_pressed, Color("#3a4a78"))
-	_button(box, "🎮 혼자 연습", func(): Net.start_practice(), Color("#5a4a78"))
+	_button(box, "🎮 블록 혼자 연습", func(): Net.start_practice("blocks"), Color("#5a4a78"))
+	_button(box, "🖼 숨은그림 찾기", func(): Net.start_practice("hidden"), Color("#6a5a3d"))
 
 	_main_message = _title(box, "", 30)
 	var help := _title(box, "같이 하려면 한 명이 핫스팟을 켜고\n다른 사람은 그 와이파이에 연결해요", 26)
@@ -161,8 +160,9 @@ func _build_host() -> void:
 	_title(box, "🏠 내 방")
 	_host_info = _title(box, "", 28)
 	_host_list = _title(box, "", 38)
-	_host_list.custom_minimum_size = Vector2(600, 380)
-	_start_button = _button(box, "▶ 시작", func(): Net.start_match(), Color("#3d6a4f"))
+	_host_list.custom_minimum_size = Vector2(600, 300)
+	_start_button = _button(box, "▶ 블록 대전", func(): Net.start_match("blocks"), Color("#3d6a4f"))
+	_hidden_start_button = _button(box, "▶ 숨은그림 대결", func(): Net.start_match("hidden"), Color("#6a5a3d"))
 	_button(box, "나가기", _on_leave_pressed, Color("#5a3d3d"))
 
 
@@ -253,8 +253,11 @@ func _refresh_players() -> void:
 	var text := "\n".join(lines)
 	_host_list.text = text
 	_guest_list.text = text
-	_start_button.disabled = Net.players.size() < 2
-	_start_button.text = "▶ 시작" if Net.players.size() >= 2 else "친구를 기다려요"
+	var can_start := Net.players.size() >= 2
+	_start_button.disabled = not can_start
+	_start_button.text = "▶ 블록 대전" if can_start else "친구를 기다려요"
+	_hidden_start_button.disabled = not can_start
+	_hidden_start_button.visible = can_start   # 친구가 들어오면 두 가지 놀이 중 고를 수 있다
 	var ips := Net.local_ips()
 	_host_info.text = "내 번호: %s" % (", ".join(ips) if not ips.is_empty() else "없음 (와이파이를 확인해요)")
 

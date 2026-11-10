@@ -45,6 +45,7 @@ var items: Array[String] = []  # 가지고 있는 아이템 (앞에서부터 씀
 var pending_garbage := 0       # 받을 예정인 방해 줄 수
 var effects := {"fast": 0.0, "fog": 0.0, "shield": 0.0}  # 남은 효과 시간(초)
 
+var play_time := 0.0   # 이 판을 시작하고 흐른 시간(초). 시간이 갈수록 빨라지는 데 씀
 var fall_timer := 0.0
 var lock_timer := 0.0
 var lock_resets := 0
@@ -353,6 +354,7 @@ func _process(delta: float) -> void:
 	_send_state_if_needed(delta)
 	if finished or board.game_over or board.piece_type < 0:
 		return
+	_update_level(delta)
 
 	# ◀ ▶ 를 누르고 있으면 잠깐 뒤부터 계속 움직인다
 	for dir_name in ["left", "right"]:
@@ -387,10 +389,25 @@ func _process(delta: float) -> void:
 
 # 지금 한 칸 떨어지는 데 걸리는 시간. 레벨이 오르면 빨라지고, ⚡ 를 맞으면 더 빨라진다.
 func _fall_interval() -> float:
-	var t := maxf(Config.FALL_MIN, Config.FALL_START - board.level() * Config.FALL_STEP)
+	var t := maxf(Config.FALL_MIN, Config.FALL_START - _level() * Config.FALL_STEP)
 	if effects["fast"] > 0.0:
 		t *= Config.FAST_MULTIPLIER
 	return t
+
+
+# 지금 레벨 (0부터). 지운 줄 수로 오르는 레벨 + 판이 시작된 뒤 흐른 시간으로 오르는 레벨.
+# 대전에서는 모두 같은 시간에 시작하므로 다 같이 빨라져서, 판이 너무 길어지지 않는다.
+func _level() -> int:
+	return board.level() + int(play_time / Config.SECONDS_PER_LEVEL)
+
+
+# 흐른 시간을 재고, 레벨이 오르면 알려 준다
+func _update_level(delta: float) -> void:
+	var before := _level()
+	play_time += delta
+	if _level() > before:
+		_show_toast("빨라진다! 레벨 %d" % (_level() + 1))
+		_refresh_side()
 
 
 func _update_effects(delta: float) -> void:
@@ -607,15 +624,16 @@ func _refresh_board() -> void:
 	view.ghost = []
 	if board.piece_type >= 0 and not board.game_over:
 		view.active = board.piece_cells()
-		var g := board.cells_at(board.piece_type, board.piece_rot, board.piece_pos + Vector2i(0, board.drop_distance()))
-		view.ghost = g
+		if Config.GHOST_ENABLED:
+			# 떨어질 자리 미리 보기 (설정에서 켰을 때만)
+			view.ghost = board.cells_at(board.piece_type, board.piece_rot, board.piece_pos + Vector2i(0, board.drop_distance()))
 		view.set_cells(board.snapshot(true))
 	view.queue_redraw()
 
 
 func _refresh_side() -> void:
 	preview.set_types(board.next_queue.slice(0, Config.NEXT_PREVIEW))
-	info_label.text = "%d줄  레벨 %d" % [board.lines_total, board.level() + 1]
+	info_label.text = "%d줄  레벨 %d" % [board.lines_total, _level() + 1]
 	# 아이템 버튼에는 다음에 쓸 아이템, 아래 칸에는 그다음 아이템들
 	var item_label: Label = pads["item"]["label"]
 	item_label.text = Config.ITEMS[items[0]]["icon"] if items.size() > 0 else ""

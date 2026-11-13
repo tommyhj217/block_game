@@ -87,14 +87,27 @@ func _build(seed_value: int, s: Dictionary) -> void:
 	if not images.is_empty() and _rng.randf() < Config.HIDDEN_IMAGE_CHANCE:
 		_image_scene(Config.HIDDEN_SCENE_DIR + "/" + images[_rng.randi_range(0, images.size() - 1)])
 	if image == null:
-		if _rng.randf() < 0.5:
+		var pick_theme := _rng.randf()
+		if pick_theme < 0.4:
+			theme = "space"
+			_space(int(s["props"]))
+			# 낙서 그림에서는 물건도 낙서처럼 작게, 다른 낙서와 겹치지 않는 빈 곳에 놓는다.
+			# 대신 찾지 않아도 되는 물건을 더 많이 섞어서 헷갈리게 한다.
+			s = s.duplicate()
+			s["size"] = [s["size"][0] * 0.62, s["size"][1] * 0.62]
+			s["camo"] = 0.06
+			s["free"] = true   # 물건을 다른 그림과 겹치지 않는 자리에, 그림 전체에 고르게 놓는다
+			s["clear"] = 0.0
+			s["extras"] = int(s["extras"]) + 8
+		elif pick_theme < 0.7:
 			theme = "room"
 			_room()
 			_wall_items()
+			_floor_items(int(s["props"]), int(s["clutter"]))
 		else:
 			theme = "park"
 			_park()
-		_floor_items(int(s["props"]), int(s["clutter"]))
+			_floor_items(int(s["props"]), int(s["clutter"]))
 		# 2) 가려진 선 지우기 → 최종 선
 		_flatten()
 	_index()
@@ -634,7 +647,12 @@ func _place(id: String, s: Dictionary, placed: Array) -> Dictionary:
 		var strokes := []
 		for st in HiddenShapes.placed(id, pos, size, rot, flip):
 			strokes.append(_wobble(st))
-		var score := _alignment(strokes) + 0.3 * _local_density(pos, size * 0.6)
+		var align := _alignment(strokes)
+		var score := align + 0.3 * _local_density(pos, size * 0.6)
+		if s.has("free"):
+			# 낙서 장면: 다른 선과 거의 안 겹치는 자리면 바로 그 자리에 놓는다 (무작위 위치라 고르게 퍼진다)
+			if align < 0.1:
+				return {"id": id, "pos": pos, "size": size, "rot": rot, "flip": flip, "strokes": strokes}
 		cands.append({"id": id, "pos": pos, "size": size, "rot": rot, "flip": flip, "strokes": strokes, "score": score})
 	if cands.is_empty():
 		var size := float(s["size"][0])
@@ -741,3 +759,115 @@ func target_alignments() -> Array:
 	for t in targets:
 		result.append(_alignment(t["strokes"]))
 	return result
+
+
+# ═══════════════ 우주 낙서 장면 (흑백 선 그림) ═══════════════
+
+# 색칠 책 같은 흑백 낙서 그림: 아래에 큰 행성, 그 위 우주에 행성·로켓·우주인·별자리·반짝이를
+# 서로 겹치지 않게 빽빽이 흩뿌린다. 숨길 물건은 이 낙서들 사이 빈 곳에 같은 선으로 섞여 들어간다.
+func _space(count: int) -> void:
+	var w := world_size.x
+	var h := world_size.y
+	var P := _props
+	_wall_h = 0.0
+	# 맨 뒤: 은하 소용돌이와 바람결 (짧은 곡선들)
+	P.begin(Vector2.ZERO, 1.0)
+	var gc := Vector2(_rng.randf_range(w * 0.3, w * 0.7), _rng.randf_range(h * 0.12, h * 0.3))
+	for i in range(44):
+		var rad := _rng.randf_range(30, 380)
+		var a0 := _rng.randf_range(0, 360)
+		P.arc(gc, Vector2(rad, rad * 0.55), a0, a0 + _rng.randf_range(16, 46), 6)
+	for i in range(46):
+		var c := Vector2(_rng.randf_range(0, w), _rng.randf_range(0, h * 0.8))
+		var d := (c - gc).normalized().orthogonal()
+		var l := _rng.randf_range(30, 90)
+		P.L([c - d * l, c + (c - gc).normalized() * 6, c + d * l])
+	_layer()
+	# 큰 행성
+	var pr := w * _rng.randf_range(0.7, 0.85)
+	var pc := Vector2(w * _rng.randf_range(0.2, 0.45), h + pr * _rng.randf_range(0.35, 0.5))
+	P.begin(pc, 1.0)
+	P.big_planet(pr)
+	_layer()
+	# 행성 가장자리의 나무와 건물 (바깥쪽을 향해 기울여 세운다)
+	for i in range(_rng.randi_range(9, 13)):
+		var a := deg_to_rad(_rng.randf_range(-150, -30))
+		var dir := Vector2.from_angle(a)
+		var p := pc + dir * (pr - 2)
+		if p.x < 30 or p.x > w - 30 or p.y > h - 20:
+			continue
+		P.begin(p, 1.0, false, a + PI / 2.0)
+		if _rng.randf() < 0.2:
+			P.tiny_city(_rng.randf_range(60, 90))
+		else:
+			P.tiny_tree(_rng.randf_range(50, 80))
+		_layer()
+
+	# 우주에 떠 있는 것들: 큰 것부터 놓고, 이미 놓은 것과 겹치지 않는 자리를 찾는다
+	var placed := []   # {"pos", "r"}
+	var things := []   # [종류, 반지름]
+	things.append(["astronaut", 100.0])
+	things.append(["astronaut", 100.0])
+	things.append(["sun_swirl", 90.0])
+	for i in range(2):
+		things.append(["planet_ring", 120.0])
+		things.append(["planet_crater", 80.0])
+		things.append(["rocket", 95.0])
+		things.append(["satellite", 80.0])
+		things.append(["ufo", 60.0])
+	things.append(["planet_hatch", 70.0])
+	things.append(["air_balloon", 75.0])
+	for i in range(5):
+		things.append(["comet", 60.0])
+	for i in range(6):
+		things.append(["constellation", 62.0])
+	for i in range(3):
+		things.append(["planet_crater", 34.0])
+	for i in range(int(count * 1.3)):
+		things.append(["sparkle", 20.0])
+	for i in range(int(count * 0.9)):
+		things.append(["asterisk", 13.0])
+	for i in range(int(count * 1.0)):
+		things.append(["ring", 9.0])
+	for i in range(int(count * 0.8)):
+		things.append(["dot", 6.0])
+	for thing in things:
+		var kind: String = thing[0]
+		var r: float = thing[1] * _rng.randf_range(0.85, 1.1)
+		var pos := Vector2.ZERO
+		var ok := false
+		for attempt in range(40):
+			pos = Vector2(_rng.randf_range(r * 0.7, w - r * 0.7), _rng.randf_range(r * 0.7, h - r * 0.7))
+			if pos.distance_to(pc) < pr + r * 0.8:
+				continue   # 큰 행성 안쪽은 건너뜀
+			ok = true
+			for q in placed:
+				if pos.distance_to(q["pos"]) < r + q["r"] + 4.0:
+					ok = false
+					break
+			if ok:
+				break
+		if not ok:
+			continue
+		placed.append({"pos": pos, "r": r})
+		var rot := _rng.randf_range(-0.6, 0.6)
+		P.begin(pos, 1.0, _rng.randf() < 0.5, rot)
+		match kind:
+			"astronaut": P.astronaut()
+			"sun_swirl": P.sun_swirl(r * 0.7)
+			"planet_ring": P.planet_ring(r * 0.55)
+			"planet_crater": P.planet_crater(r * 0.9)
+			"planet_hatch": P.planet_hatch(r * 0.9)
+			"rocket": P.rocket(r * 1.9)
+			"satellite": P.satellite(r * 1.9)
+			"ufo": P.ufo(r * 1.8)
+			"air_balloon": P.air_balloon(r * 0.55)
+			"comet": P.comet(r * 0.26)
+			"constellation": P.constellation(r * 1.7)
+			"sparkle": P.sparkle(r * 0.9)
+			"asterisk": P.asterisk(r * 0.8)
+			"ring":
+				P.col(HiddenProps.BG)
+				P.ellipse(Vector2.ZERO, Vector2(r * 0.7, r * 0.7), true, 8)
+			_: P.dot(Vector2.ZERO, 2.5)
+		_layer()

@@ -31,13 +31,13 @@ func _init(r: RandomNumberGenerator) -> void:
 
 
 # 새 소품 시작. origin = 바닥 가운데 위치, s = 크기 배율, flip = 좌우 뒤집기
-func begin(origin: Vector2, s: float, flip: bool = false) -> void:
+func begin(origin: Vector2, s: float, flip: bool = false, rot: float = 0.0) -> void:
 	fills = []
 	strokes = []
 	_stack = []
 	_col = PAPER
 	# Transform2D(회전, 배율, 기울임, 위치)
-	_xf = Transform2D(0.0, Vector2(-s if flip else s, s), 0.0, origin)
+	_xf = Transform2D(rot, Vector2(-s if flip else s, s), 0.0, origin)   # rot = 기울기(라디안)
 
 
 func end() -> Dictionary:
@@ -1065,3 +1065,241 @@ func grass_tuft() -> void:
 	for i in range(rng.randi_range(3, 5)):
 		var x := R(-24, 24)
 		shape([Vector2(x - 5, 0), Vector2(x + 5, 0), Vector2(x + R(-12, 12), -R(22, 40))])
+
+
+
+# ═══════════════ 우주 낙서 (흑백 선 그림) ═══════════════
+# 색칠 책 같은 흑백 낙서 그림. 모든 모양을 종이색으로 칠해서 선만 보이게 한다.
+# 이 묶음의 소품은 가운데가 (0, 0)이다 (바닥에 서 있는 것이 아니라 떠 있는 것이라서).
+# 숨길 물건과 겹치는 모양(다섯 꼭짓점 별, 초승달)은 쓰지 않는다.
+
+const BG := Color("#fdfcf7")   # 종이색 (HiddenWorld의 바탕색과 같다)
+
+
+# 고리가 있는 행성
+func planet_ring(r: float) -> void:
+	col(BG)
+	arc(Vector2.ZERO, Vector2(r * 1.7, r * 0.45), 180, 360, 16)   # 뒤쪽 고리
+	ellipse(Vector2.ZERO, Vector2(r, r))
+	arc(Vector2.ZERO, Vector2(r * 1.7, r * 0.45), 0, 180, 16)     # 앞쪽 고리 (두 줄)
+	arc(Vector2.ZERO, Vector2(r * 1.45, r * 0.32), 8, 172, 14)
+	for k in range(3):
+		arc(Vector2(0, -r * 0.55 + k * r * 0.3), Vector2(r * 0.75, r * 0.14), 200, 340, 8)
+
+
+# 구덩이가 있는 행성
+func planet_crater(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r))
+	for k in range(rng.randi_range(4, 7)):
+		var p := Vector2.from_angle(R(0, TAU)) * R(0, r * 0.7)
+		var cr := R(r * 0.08, r * 0.2)
+		ellipse(p, Vector2(cr, cr * 0.8), false, 8)
+	for k in range(rng.randi_range(6, 12)):
+		dot(Vector2.from_angle(R(0, TAU)) * R(0, r * 0.85), 1.8)
+	# 작은 깃발 같은 탑
+	if chance(0.4):
+		L([Vector2(0, -r), Vector2(0, -r - 26)])
+		ellipse(Vector2(0, -r - 30), Vector2(5, 5), true, 6)
+
+
+# 빗금 무늬 행성
+func planet_hatch(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r))
+	var x := -r + 8.0
+	while x < r:
+		var half := sqrt(maxf(r * r - x * x, 0.0)) * 0.92
+		L([Vector2(x, -half), Vector2(x, half)])
+		x += 9.0
+
+
+# 소용돌이 해
+func sun_swirl(r: float) -> void:
+	col(BG)
+	for i in range(18):
+		var a := TAU * i / 18.0
+		var d := Vector2.from_angle(a)
+		L([d * (r + 6), d * (r + 14) + d.orthogonal() * 4, d * (r + 22)])
+	ellipse(Vector2.ZERO, Vector2(r, r))
+	var spiral := []
+	for k in range(30):
+		var a := k * 0.5
+		spiral.append(Vector2(cos(a), sin(a)) * (3.0 + k * r * 0.027))
+	L(spiral)
+
+
+# 로켓 (위쪽을 향함)
+func rocket(h: float) -> void:
+	var w := h * 0.32
+	col(BG)
+	# 날개
+	shape([Vector2(-w / 2, h * 0.1), Vector2(-w, h * 0.42), Vector2(-w / 2, h * 0.34)])
+	shape([Vector2(w / 2, h * 0.1), Vector2(w, h * 0.42), Vector2(w / 2, h * 0.34)])
+	# 몸통
+	shape([Vector2(0, -h * 0.5), Vector2(w * 0.38, -h * 0.3), Vector2(w / 2, -h * 0.05), Vector2(w / 2, h * 0.34),
+			Vector2(-w / 2, h * 0.34), Vector2(-w / 2, -h * 0.05), Vector2(-w * 0.38, -h * 0.3)])
+	L([Vector2(-w * 0.4, -h * 0.28), Vector2(w * 0.4, -h * 0.28)])
+	L([Vector2(-w / 2, h * 0.24), Vector2(w / 2, h * 0.24)])
+	ellipse(Vector2(0, -h * 0.08), Vector2(w * 0.24, w * 0.24), true, 10)
+	ellipse(Vector2(0, -h * 0.08), Vector2(w * 0.13, w * 0.13), false, 8)
+	# 불꽃
+	shape([Vector2(-w * 0.34, h * 0.34), Vector2(-w * 0.2, h * 0.5), Vector2(-w * 0.08, h * 0.42), Vector2(0, h * 0.58),
+			Vector2(w * 0.08, h * 0.42), Vector2(w * 0.2, h * 0.5), Vector2(w * 0.34, h * 0.34)])
+
+
+# 꼬리 달린 별똥별 (오른쪽 위로 날아감)
+func comet(r: float) -> void:
+	col(BG)
+	for k in range(4):
+		var off := (k - 1.5) * r * 0.5
+		L([Vector2(-r * 0.6, off), Vector2(-r * R(2.6, 4.0), off * 1.6)])
+	ellipse(Vector2.ZERO, Vector2(r, r * 0.9), true, 12)
+	ellipse(Vector2(r * 0.2, -r * 0.2), Vector2(r * 0.25, r * 0.2), false, 6)
+	dot(Vector2(-r * 0.3, r * 0.3), 1.8)
+
+
+func ufo(w: float) -> void:
+	col(BG)
+	shape(arc_pts(Vector2(0, -w * 0.08), Vector2(w * 0.24, w * 0.26), 180, 360, 10))
+	ellipse(Vector2.ZERO, Vector2(w / 2, w * 0.14), true, 16)
+	for k in range(-2, 3):
+		ellipse(Vector2(k * w * 0.17, w * 0.02), Vector2(w * 0.035, w * 0.035), false, 6)
+	L([Vector2(-w * 0.2, w * 0.13), Vector2(-w * 0.28, w * 0.3)])
+	L([Vector2(w * 0.2, w * 0.13), Vector2(w * 0.28, w * 0.3)])
+	L([Vector2(0, -w * 0.34), Vector2(0, -w * 0.44)])
+	ellipse(Vector2(0, -w * 0.47), Vector2(4, 4), true, 6)
+
+
+# 인공위성: 몸통과 양쪽의 격자 날개
+func satellite(w: float) -> void:
+	col(BG)
+	for side in [-1.0, 1.0]:
+		var x0: float = side * w * 0.14
+		var x1: float = side * w * 0.5
+		rect(minf(x0, x1), -w * 0.1, maxf(x0, x1), w * 0.1)
+		for k in range(1, 4):
+			var x := lerpf(x0, x1, k / 4.0)
+			L([Vector2(x, -w * 0.1), Vector2(x, w * 0.1)])
+		L([Vector2(x0, 0), Vector2(x1, 0)])
+	rect(-w * 0.14, -w * 0.14, w * 0.14, w * 0.14)
+	L([Vector2(0, -w * 0.14), Vector2(0, -w * 0.3)])
+	arc(Vector2(0, -w * 0.36), Vector2(w * 0.1, w * 0.06), 0, 180, 6)
+
+
+# 별자리: 작은 동그라미를 선으로 이은 것
+func constellation(spread: float) -> void:
+	col(BG)
+	var pts := []
+	var p := Vector2(-spread * 0.5, R(-spread * 0.3, spread * 0.3))
+	for i in range(rng.randi_range(3, 5)):
+		pts.append(p)
+		p += Vector2(R(spread * 0.25, spread * 0.45), R(-spread * 0.4, spread * 0.4))
+	for i in range(pts.size() - 1):
+		var d: Vector2 = (pts[i + 1] - pts[i]).normalized()
+		L([pts[i] + d * 7, pts[i + 1] - d * 7])
+	for q in pts:
+		ellipse(q, Vector2(5, 5), true, 8)
+
+
+# 네 갈래 반짝이
+func sparkle(r: float) -> void:
+	col(BG)
+	var pts := []
+	for i in range(8):
+		var a := TAU * i / 8.0
+		pts.append(Vector2.from_angle(a) * (r if i % 2 == 0 else r * 0.28))
+	shape(pts)
+
+
+# 선 세 개가 엇갈린 작은 별
+func asterisk(r: float) -> void:
+	for i in range(3):
+		var d := Vector2.from_angle(PI * i / 3.0) * r
+		L([-d, d])
+
+
+# 열기구
+func air_balloon(r: float) -> void:
+	col(BG)
+	L([Vector2(-r * 0.5, r * 0.85), Vector2(-r * 0.2, r * 1.5)])
+	L([Vector2(r * 0.5, r * 0.85), Vector2(r * 0.2, r * 1.5)])
+	rect(-r * 0.24, r * 1.5, r * 0.24, r * 1.85)
+	ellipse(Vector2.ZERO, Vector2(r * 0.85, r), true, 16)
+	for k in [0.3, 0.6]:
+		arc(Vector2.ZERO, Vector2(r * 0.85 * k, r), 90, 270, 10)
+		arc(Vector2.ZERO, Vector2(r * 0.85 * k, r), -90, 90, 10)
+	L([Vector2(0, -r), Vector2(0, r)])
+
+
+# 우주인 (둥둥 떠 있음)
+func astronaut() -> void:
+	col(BG)
+	# 등에 멘 산소통
+	rect(-34, -34, 34, 30)
+	# 팔다리 (두꺼운 네모를 벌린 모양)
+	shape([Vector2(-24, -18), Vector2(-62, -44), Vector2(-72, -30), Vector2(-28, 2)])
+	shape([Vector2(24, -18), Vector2(64, -6), Vector2(60, 12), Vector2(26, 4)])
+	shape([Vector2(-22, 26), Vector2(-40, 74), Vector2(-20, 80), Vector2(-4, 34)])
+	shape([Vector2(22, 26), Vector2(44, 66), Vector2(26, 78), Vector2(4, 34)])
+	# 장갑과 신발
+	ellipse(Vector2(-70, -40), Vector2(10, 10), true, 8)
+	ellipse(Vector2(66, 4), Vector2(10, 10), true, 8)
+	ellipse(Vector2(-32, 82), Vector2(14, 8), true, 8)
+	ellipse(Vector2(38, 78), Vector2(14, 8), true, 8)
+	# 몸통과 가슴의 단추 상자
+	shape([Vector2(-26, -30), Vector2(26, -30), Vector2(28, 34), Vector2(-28, 34)])
+	rect(-14, -10, 14, 12)
+	dot(Vector2(-6, 0), 2.5)
+	dot(Vector2(6, 0), 2.5)
+	L([Vector2(-10, 7), Vector2(10, 7)])
+	# 헬멧과 얼굴
+	ellipse(Vector2(0, -58), Vector2(34, 32))
+	ellipse(Vector2(0, -56), Vector2(24, 21))
+	dot(Vector2(-8, -60), 2.5)
+	dot(Vector2(8, -60), 2.5)
+	arc(Vector2(0, -52), Vector2(8, 6), 20, 160, 6)
+	L([Vector2(0, -90), Vector2(0, -102)])
+	ellipse(Vector2(0, -105), Vector2(4, 4), true, 6)
+
+
+# 큰 행성 (화면 아래쪽에 일부만 보임): 땅 덩어리, 구름 무늬
+func big_planet(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r), true, 60)
+	# 땅 덩어리 (위쪽 보이는 부분에만)
+	for k in range(rng.randi_range(9, 13)):
+		var a := deg_to_rad(R(-140, -40))
+		var c := Vector2.from_angle(a) * R(r * 0.3, r * 0.84)
+		shape(bumpy_pts(c, Vector2(R(40, 110), R(22, 50)), rng.randi_range(5, 8), 0.3), false)
+	# 구름 같은 물결 줄
+	for k in range(rng.randi_range(24, 34)):
+		var a := deg_to_rad(R(-150, -30))
+		var c := Vector2.from_angle(a) * R(r * 0.25, r * 0.93)
+		arc(c, Vector2(R(14, 30), R(6, 12)), 190, 350, 5)
+	for k in range(30):
+		var a := deg_to_rad(R(-150, -30))
+		ellipse(Vector2.from_angle(a) * R(r * 0.25, r * 0.92), Vector2(R(5, 10), R(4, 7)), false, 6)
+
+
+# 행성 가장자리에 서 있는 작은 나무 (바닥 가운데가 (0, 0), 위쪽이 바깥)
+func tiny_tree(h: float) -> void:
+	col(BG)
+	L([Vector2(0, 0), Vector2(0, -h * 0.5)])
+	L([Vector2(0, -h * 0.3), Vector2(h * 0.14, -h * 0.42)])
+	shape(bumpy_pts(Vector2(0, -h * 0.7), Vector2(h * 0.26, h * 0.3), 6, 0.25))
+
+
+# 행성 위의 작은 건물들
+func tiny_city(h: float) -> void:
+	col(BG)
+	for k in range(3):
+		var x := (k - 1) * h * 0.3
+		var bh := h * R(0.5, 1.0)
+		rect(x - h * 0.13, -bh, x + h * 0.13, 4)
+		var y := -bh + 8
+		while y < -6:
+			L([Vector2(x - h * 0.07, y), Vector2(x - h * 0.02, y)])
+			L([Vector2(x + h * 0.03, y), Vector2(x + h * 0.08, y)])
+			y += 10
+	L([Vector2(0, -h), Vector2(0, -h - 14)])

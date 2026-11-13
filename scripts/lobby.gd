@@ -127,7 +127,7 @@ func _build_main() -> void:
 	_button(box, "🏠 방 만들기", _on_host_pressed, Color("#3d6a4f"))
 	_button(box, "🔍 방 찾기", _on_search_pressed, Color("#3a4a78"))
 	_button(box, "🎮 블록 혼자 연습", func(): Net.start_practice("blocks"), Color("#5a4a78"))
-	_button(box, "🖼 숨은그림 찾기", func(): Net.start_practice("hidden"), Color("#6a5a3d"))
+	_button(box, "🖼 숨은그림 찾기", _on_hidden_pressed, Color("#6a5a3d"))
 
 	_main_message = _title(box, "", 30)
 	var help := _title(box, "같이 하려면 한 명이 핫스팟을 켜고\n다른 사람은 그 와이파이에 연결해요", 26)
@@ -266,3 +266,9 @@ func _on_leave_pressed() -> void:
 	Net.stop_search()
 	Net.leave()
 	_show("main")
+
+
+# 숨은그림 찾기 혼자 하기: 총점을 0으로 하고 시작한다 (저장된 단계부터 이어서)
+func _on_hidden_pressed() -> void:
+	Net.hidden_run_score = 0
+	Net.start_practice("hidden")

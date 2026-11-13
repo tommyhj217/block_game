@@ -41,6 +41,7 @@ var players := {}         # 방에 있는 사람들 {아이디: 이름}. 방장�
 var match_players := {}   # 지금 판을 시작할 때 있던 사람들 {아이디: 이름}
 var match_seed := 0       # 판마다 바뀌는 난수 씨앗
 var match_mode := "blocks"  # 지금 판의 놀이 종류: "blocks"(블록 대전), "hidden"(숨은그림 찾기)
+var hidden_run_score := 0   # 숨은그림 찾기: 이어서 하는 동안 쌓인 총점
 var in_room := false
 var is_host := false
 var last_message := ""    # 로비로 돌아갔을 때 보여 줄 안내 (예: 방이 닫혔어요)

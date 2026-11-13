@@ -25,7 +25,10 @@ var lines: Array = []      # 최종 선들 (PackedVector2Array 목록, 가려진
 var fills: Array = []      # 색칠 모양들 {"poly", "color"} — 뒤에서 앞 순서. 이 순서대로 칠하면 앞 그림이 뒤를 덮는다
 # 찾을 물건: {"shape", "name", "pos", "size", "rot", "flip", "strokes"(그림 좌표 선 목록), "found"}
 var targets := []
+var theme := "room"        # 장면 종류: "room"(교실), "park"(공원), "image"(넣어 둔 그림 파일)
+var image: Texture2D = null   # 그림 파일 장면일 때 그 그림 (아니면 null)
 
+var _base_raw := PackedByteArray()  # 그림 파일에서 찾은 선 자리 (그림 파일 장면일 때만)
 var _rng := RandomNumberGenerator.new()
 var _props: HiddenProps
 var _layers := []          # 뒤에서 앞으로 그리는 순서의 그림들 {"fills", "strokes"}
@@ -38,8 +41,19 @@ var _cw := 0
 var _ch := 0
 
 
+# 단계 번호(0부터) → 그 단계의 설정. 1단계와 50단계 설정 사이를 단계만큼 섞어서 만든다.
 static func stage_settings(stage: int) -> Dictionary:
-	return Config.HIDDEN_STAGES[clampi(stage, 0, Config.HIDDEN_STAGES.size() - 1)]
+	var a: Dictionary = Config.HIDDEN_STAGE_FIRST
+	var b: Dictionary = Config.HIDDEN_STAGE_LAST
+	var t := clampf(float(stage) / (Config.HIDDEN_STAGE_COUNT - 1), 0.0, 1.0)
+	var s := {}
+	for key in a:
+		s[key] = lerpf(float(a[key]), float(b[key]), t)   # lerpf(a, b, t): a에서 b로 t만큼 간 값
+	for key in ["targets", "extras", "props", "clutter"]:
+		s[key] = int(round(s[key]))
+	s["size"] = [s["size"], s["size"] * 1.35]
+	s["time"] = s["targets"] * s["time_per"]
+	return s
 
 
 static func make(seed_value: int, stage: int) -> HiddenPuzzle:
@@ -48,16 +62,41 @@ static func make(seed_value: int, stage: int) -> HiddenPuzzle:
 	return p
 
 
+# 넣어 둔 그림 파일 목록 (assets/scenes 폴더의 png, jpg). 없으면 빈 목록.
+static func scene_images() -> Array:
+	var out := []
+	var dir := DirAccess.open(Config.HIDDEN_SCENE_DIR)
+	if dir == null:
+		return out
+	for f in dir.get_files():
+		# APK 안에서는 "그림.png.import"처럼 보이므로 뒤의 .import를 뗀다
+		var file_name: String = f.trim_suffix(".import")
+		var ext := file_name.get_extension().to_lower()
+		if ext in ["png", "jpg", "jpeg", "webp"] and not out.has(file_name):
+			out.append(file_name)
+	out.sort()
+	return out
+
+
 func _build(seed_value: int, s: Dictionary) -> void:
 	_rng.seed = seed_value
 	_props = HiddenProps.new(_rng)
 
-	# 1) 장면 그리기 (뒤에서 앞으로)
-	_room()
-	_wall_items()
-	_floor_items(int(s["props"]), int(s["clutter"]))
-	# 2) 가려진 선 지우기 → 최종 선
-	_flatten()
+	# 1) 장면 고르기: 넣어 둔 그림 파일 / 교실 / 공원
+	var images := scene_images()
+	if not images.is_empty() and _rng.randf() < Config.HIDDEN_IMAGE_CHANCE:
+		_image_scene(Config.HIDDEN_SCENE_DIR + "/" + images[_rng.randi_range(0, images.size() - 1)])
+	if image == null:
+		if _rng.randf() < 0.5:
+			theme = "room"
+			_room()
+			_wall_items()
+		else:
+			theme = "park"
+			_park()
+		_floor_items(int(s["props"]), int(s["clutter"]))
+		# 2) 가려진 선 지우기 → 최종 선
+		_flatten()
 	_index()
 
 	# 3) 숨길 물건 고르기: 찾을 물건 + 헷갈리게 하는 다른 물건
@@ -199,11 +238,17 @@ func _floor_items(prop_count: int, clutter_count: int) -> void:
 	var h := world_size.y
 	var top := _wall_h + 60.0
 	var P := _props
-	# 깔개 한두 개
+	var park := theme == "park"
+	# 교실: 깔개 한두 개 / 공원: 연못과 돗자리
 	for i in range(_rng.randi_range(1, 2)):
 		var y := _rng.randf_range(top + 200, h - 200)
 		P.begin(Vector2(_rng.randf_range(250, w - 250), y), _scale_at(y))
-		P.rug(_rng.randf_range(380, 520))
+		if not park:
+			P.rug(_rng.randf_range(380, 520))
+		elif i == 0:
+			P.pond(_rng.randf_range(360, 480))
+		else:
+			P.picnic_mat(_rng.randf_range(260, 340))
 		_layer()
 	# 납작한 잡동사니 (뒤에서 앞으로)
 	var flat := []
@@ -212,10 +257,17 @@ func _floor_items(prop_count: int, clutter_count: int) -> void:
 	flat.sort_custom(func(a, b): return a.y < b.y)
 	for p in flat:
 		P.begin(p, _scale_at(p.y), _rng.randf() < 0.5)
-		match _rng.randi_range(0, 2):
-			0: P.paper(_rng.randf_range(60, 90))
-			1: P.flat_book(_rng.randf_range(70, 100))
-			_: P.open_book_flat()
+		if park:
+			match _rng.randi_range(0, 3):
+				0: P.flower_patch()
+				1: P.rock(_rng.randf_range(28, 50))
+				2: P.grass_tuft()
+				_: P.flower_patch()
+		else:
+			match _rng.randi_range(0, 2):
+				0: P.paper(_rng.randf_range(60, 90))
+				1: P.flat_book(_rng.randf_range(70, 100))
+				_: P.open_book_flat()
 		_layer()
 	# 서 있는 것: 바닥을 칸으로 나눠 고르게 흩뿌린다
 	var cols := 5
@@ -233,6 +285,10 @@ func _floor_items(prop_count: int, clutter_count: int) -> void:
 	var kinds := {"kid": 18, "kid_sitting": 8, "cat": 4, "dog": 4, "bear": 3, "rabbit": 3, "table": 7,
 			"desk": 4, "chair": 8, "stool": 4, "plant": 6, "box": 7, "book_stack": 8, "backpack": 4,
 			"globe": 2, "basket": 3, "bin": 3, "ball": 3, "blocks": 3, "floor_lamp": 2}
+	if park:
+		kinds = {"kid": 20, "kid_sitting": 6, "cat": 4, "dog": 6, "rabbit": 4, "bear": 1, "tree": 9,
+				"bush": 9, "bench": 6, "duck": 5, "slide": 2, "street_lamp": 3, "balloons": 3,
+				"basket": 4, "backpack": 3, "ball": 5, "sandbox": 2, "sign": 3, "bin": 2, "bike": 3}
 	for p in spots:
 		var kind := _pick(kinds)
 		P.begin(p, _scale_at(p.y), _rng.randf() < 0.5)
@@ -256,8 +312,143 @@ func _floor_items(prop_count: int, clutter_count: int) -> void:
 			"bin": P.bin()
 			"ball": P.ball(_rng.randf_range(18, 28))
 			"blocks": P.blocks()
+			"tree": P.tree(_rng.randf_range(260, 360))
+			"bush": P.bush(_rng.randf_range(90, 150))
+			"bench": P.bench(_rng.randf_range(170, 210))
+			"duck": P.duck()
+			"slide": P.slide(_rng.randf_range(200, 240))
+			"street_lamp": P.street_lamp(_rng.randf_range(260, 320))
+			"balloons": P.balloons()
+			"sandbox": P.sandbox(_rng.randf_range(200, 260))
+			"sign": P.sign()
+			"bike": P.bike()
 			_: P.floor_lamp(_rng.randf_range(220, 280))
 		_layer()
+
+
+# 공원 배경: 하늘, 해, 구름, 먼 언덕과 집들, 잔디, 구불구불한 길, 울타리
+func _park() -> void:
+	var w := world_size.x
+	var h := world_size.y
+	_wall_h = h * _rng.randf_range(0.27, 0.31)   # 땅과 하늘의 경계
+	var P := _props
+	P.begin(Vector2.ZERO, 1.0)
+	P.col(P.pick(["#cfeaf7", "#d9efff", "#ffe9d6"]))
+	P.F([Vector2(0, 0), Vector2(w, 0), Vector2(w, _wall_h), Vector2(0, _wall_h)])
+	# 잔디: 가로 띠마다 초록이 조금씩 다르다
+	var grass := P.pick(["#b7e08a", "#a8d977", "#c2e59c"])
+	var y := _wall_h
+	while y < h:
+		var ny := y + _rng.randf_range(90, 160)
+		P.col(grass.lerp(Color("#eaf6c8"), _rng.randf_range(0.0, 0.35)))
+		var edge := [Vector2(0, y)]
+		var x := 0.0
+		while x <= w:
+			edge.append(Vector2(x, y + sin(x * 0.01 + y) * 8.0))
+			x += 60.0
+		edge.append(Vector2(w, minf(ny + 12, h)))
+		edge.append(Vector2(0, minf(ny + 12, h)))
+		P.F(edge)
+		y = ny
+	_layer()
+	# 해
+	P.begin(Vector2(_rng.randf_range(150, w - 150), _rng.randf_range(150, _wall_h * 0.55)), 1.0)
+	P.sun(_rng.randf_range(55, 75))
+	_layer()
+	# 구름
+	for i in range(_rng.randi_range(3, 5)):
+		P.begin(Vector2(_rng.randf_range(80, w - 80), _rng.randf_range(70, _wall_h - 150)), 1.0)
+		P.cloud(_rng.randf_range(150, 240))
+		_layer()
+	# 먼 언덕 두 줄
+	for layer_i in range(2):
+		P.begin(Vector2.ZERO, 1.0)
+		P.col(P.pick(["#9fd18b", "#8cc57a", "#b3dba0"]))
+		var base := _wall_h - 70.0 + layer_i * 45.0
+		var amp := _rng.randf_range(25, 50)
+		var f := _rng.randf_range(0.004, 0.008)
+		var ph := _rng.randf_range(0, TAU)
+		var pts := []
+		var x := -10.0
+		while x <= w + 10:
+			pts.append(Vector2(x, base + sin(x * f + ph) * amp + sin(x * f * 2.7 + ph) * amp * 0.3))
+			x += 30.0
+		P.L(pts)
+		pts.append(Vector2(w + 10, _wall_h + 30))
+		pts.append(Vector2(-10, _wall_h + 30))
+		P.F(pts)
+		_layer()
+	# 멀리 있는 집들과 나무 (땅 경계에 줄지어)
+	var x := _rng.randf_range(0, 120)
+	while x < w:
+		P.begin(Vector2(x, _wall_h + _rng.randf_range(10, 40)), 0.8, _rng.randf() < 0.5)
+		if _rng.randf() < 0.45:
+			P.house(_rng.randf_range(170, 230), _rng.randf_range(120, 160))
+		else:
+			P.tree(_rng.randf_range(240, 320))
+		_layer()
+		x += _rng.randf_range(170, 280)
+	# 길: 위에서 아래로 넓어지는 구불구불한 길
+	P.begin(Vector2.ZERO, 1.0)
+	P.col("#ecd9b0")
+	var left := []
+	var right := []
+	var cx := _rng.randf_range(w * 0.3, w * 0.7)
+	var ph2 := _rng.randf_range(0, TAU)
+	for i in range(21):
+		var t := i / 20.0
+		var py := lerpf(_wall_h + 40, h + 10, t)
+		var px := cx + sin(t * 5.0 + ph2) * 180.0
+		var half := lerpf(40, 130, t)
+		left.append(Vector2(px - half, py))
+		right.append(Vector2(px + half, py))
+	P.L(left)
+	P.L(right)
+	right.reverse()
+	P.F(left + right)
+	_layer()
+	# 울타리 한 줄
+	P.begin(Vector2(_rng.randf_range(200, w - 200), _wall_h + _rng.randf_range(150, 260)), 1.0)
+	P.fence(_rng.randf_range(420, 620))
+	_layer()
+
+
+# 넣어 둔 그림 파일을 장면으로 쓴다. 그림에서 어두운 선과 색이 바뀌는 경계를 찾아 "선 자리"로 기록하고,
+# 숨길 물건을 그 선과 많이 겹치는 자리에 놓는다. (검은 테두리가 있는 그림일수록 잘 숨는다)
+func _image_scene(path: String) -> void:
+	if not ResourceLoader.exists(path):
+		return
+	var tex := load(path) as Texture2D
+	if tex == null:
+		return
+	var img := tex.get_image()
+	if img == null:
+		return
+	if img.is_compressed():
+		img.decompress()
+	# 그림 비율에 맞춰 장면 크기를 정한다 (가로는 그대로, 세로는 비율대로)
+	var ratio := float(img.get_height()) / maxf(img.get_width(), 1)
+	world_size = Vector2(Config.HIDDEN_WORLD.x, clampf(Config.HIDDEN_WORLD.x * ratio, 900.0, 2400.0))
+	_gw = int(world_size.x / CELL) + 1
+	_gh = int(world_size.y / CELL) + 1
+	# 칸 수만큼 작게 줄인 그림에서 밝기를 읽는다 (한 픽셀 = 한 칸)
+	img.resize(_gw, _gh, Image.INTERPOLATE_BILINEAR)
+	var lum := PackedFloat32Array()
+	lum.resize(_gw * _gh)
+	for y in range(_gh):
+		for x in range(_gw):
+			lum[y * _gw + x] = img.get_pixel(x, y).get_luminance()
+	_base_raw.resize(_gw * _gh)
+	_base_raw.fill(0)
+	for y in range(_gh - 1):
+		for x in range(_gw - 1):
+			var v := lum[y * _gw + x]
+			# 어두운 선이거나, 옆·아래 칸과 밝기가 많이 다르면(색 경계) 선 자리로 본다
+			var diff := absf(v - lum[y * _gw + x + 1]) + absf(v - lum[(y + 1) * _gw + x])
+			if v < 0.3 or diff > 0.14:
+				_base_raw[y * _gw + x] = 1
+	image = tex
+	theme = "image"
 
 
 # 바닥 위치 y에 따른 크기 (멀리 있으면 작게)
@@ -386,8 +577,11 @@ func _index() -> void:
 	_cw = int(world_size.x / COARSE) + 1
 	_ch = int(world_size.y / COARSE) + 1
 	var raw := PackedByteArray()
-	raw.resize(_gw * _gh)
-	raw.fill(0)
+	if _base_raw.size() == _gw * _gh:
+		raw = _base_raw.duplicate()   # 그림 파일 장면: 그림에서 찾은 선에서 시작
+	else:
+		raw.resize(_gw * _gh)
+		raw.fill(0)
 	_dense.resize(_cw * _ch)
 	_dense.fill(0)
 	for stroke in lines:
@@ -397,6 +591,7 @@ func _index() -> void:
 	for y in range(1, _gh - 1):
 		for x in range(1, _gw - 1):
 			if raw[y * _gw + x] != 0:
+				_dense[int(y * CELL / COARSE) * _cw + int(x * CELL / COARSE)] += 1
 				for dy in range(-1, 2):
 					var row := (y + dy) * _gw
 					_occ[row + x - 1] = 1
@@ -414,9 +609,7 @@ func _mark_stroke(stroke: PackedVector2Array, raw: PackedByteArray) -> void:
 			var gx := int(p.x / CELL)
 			var gy := int(p.y / CELL)
 			if gx >= 0 and gy >= 0 and gx < _gw and gy < _gh:
-				if raw[gy * _gw + gx] == 0:
-					raw[gy * _gw + gx] = 1
-					_dense[int(p.y / COARSE) * _cw + int(p.x / COARSE)] += 1
+				raw[gy * _gw + gx] = 1
 
 
 # 물건 하나를 숨길 자리를 고른다. 후보를 여러 개 만들어 "장면 선과 맞닿는 정도"를 재고,

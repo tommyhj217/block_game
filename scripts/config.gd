@@ -104,9 +104,31 @@ const HIDDEN_HINTS := 1             # 한 판에 쓸 수 있는 💡 힌트 수
 const HIDDEN_HINT_PENALTY := 10.0   # 혼자 하기: 힌트를 쓰면 기록에 더해지는 시간(초)
 const HIDDEN_HINT_RADIUS := 230.0   # 힌트가 보여 주는 동그라미 크기 (그림 좌표). 정확한 위치는 안 알려 줌
 const HIDDEN_COUNTDOWN := 3         # 시작 전 3, 2, 1
-const HIDDEN_BATTLE_STAGE := 3      # 대결에서 쓰는 단계 (아래 표의 번호, 0부터)
+const HIDDEN_BATTLE_STAGE := 17     # 대결에서 쓰는 단계 (0부터 세므로 18단계 난이도)
 
-# 단계별 난이도. 단계가 표 끝을 넘으면 마지막 줄을 계속 쓴다.
+# ─── 숨은그림 찾기: 오락실 방식 (혼자 하기) ───
+const HIDDEN_HEARTS := 3            # 하트 수. 엉뚱한 곳을 누르면 하나 줄고, 다 없어지면 게임 끝
+const HIDDEN_FIND_SCORE := 100      # 하나 찾을 때 점수
+const HIDDEN_COMBO_SCORE := 30      # 실수 없이 연달아 찾으면 하나마다 더해지는 점수
+const HIDDEN_TIME_SCORE := 10       # 단계를 깼을 때 남은 1초마다 점수
+const HIDDEN_HEART_SCORE := 300     # 단계를 깼을 때 남은 하트마다 점수
+const HIDDEN_LOW_TIME := 15.0       # 남은 시간이 이보다 적으면 시간 막대가 빨갛게 깜빡임
+const HIDDEN_SCENE_DIR := "res://assets/scenes"  # 여기에 그림 파일(png, jpg)을 넣으면 그 그림에도 물건을 숨긴다
+const HIDDEN_IMAGE_CHANCE := 0.5    # 그림 파일이 있을 때 그 그림이 장면으로 나올 확률
+
+# 단계별 난이도: 1단계(FIRST)에서 50단계(LAST)까지 조금씩 바뀐다. 50단계를 넘으면 LAST를 계속 쓴다.
+#   targets: 찾을 물건 수 / extras: 찾지 않아도 되는 다른 숨은 물건 수 (헷갈리게 함)
+#   size: 물건의 가장 작은 크기(그림 좌표 px). 가장 큰 크기는 이것의 1.35배
+#   rot: 최대 기울기(도) / flip: 좌우 뒤집힐 확률
+#   camo: 숨기기 정도 0~1 (1 = 물건 윤곽이 장면의 선과 가장 많이 겹치는 자리)
+#   clear: 물건 안쪽의 장면 선을 지워 줄 확률 (1이면 모양이 또렷, 0이면 선이 물건을 가로질러 더 어려움)
+#   props: 서 있는 소품 수 / clutter: 바닥에 흩어진 납작한 것 수
+#   time_per: 찾을 물건 하나마다 주는 시간(초). 제한 시간 = targets × time_per
+const HIDDEN_STAGE_COUNT := 50
+const HIDDEN_STAGE_FIRST := {"targets": 5, "extras": 1, "size": 112.0, "rot": 15.0, "flip": 0.0, "camo": 0.45, "clear": 1.0, "props": 24, "clutter": 12, "time_per": 20.0}
+const HIDDEN_STAGE_LAST := {"targets": 15, "extras": 14, "size": 60.0, "rot": 180.0, "flip": 0.5, "camo": 1.0, "clear": 0.0, "props": 60, "clutter": 36, "time_per": 11.0}
+
+# (예전 6단계 표 — 지금은 쓰지 않고 위 공식을 쓴다)
 #   targets: 찾을 물건 수 / extras: 찾지 않아도 되는 다른 숨은 물건 수 (헷갈리게 함)
 #   size: 물건 크기 범위(그림 좌표 px) / rot: 최대 기울기(도) / flip: 좌우 뒤집힐 확률
 #   camo: 숨기기 정도 0~1. 자리 후보 중 물건 윤곽이 배경 선과 얼마나 겹치는 자리를 고를지 (1 = 가장 잘 숨는 자리)

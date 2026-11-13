@@ -27,6 +27,9 @@ func _draw() -> void:
 		return
 	# 종이 바탕, 그 위에 색칠 모양을 뒤에서 앞 순서로 칠한다 (앞 그림이 뒤 그림을 덮는다)
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#fdfcf7"))
+	# 넣어 둔 그림 파일 장면이면 그 그림을 장면 크기에 맞춰 깐다
+	if puzzle.image != null:
+		draw_texture_rect(puzzle.image, Rect2(Vector2.ZERO, size), false)
 	for f in puzzle.fills:
 		draw_colored_polygon(f["poly"], f["color"])
 	# 장면 선

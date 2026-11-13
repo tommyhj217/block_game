@@ -31,7 +31,8 @@
 - `scripts/hidden_puzzle.gd` (`HiddenPuzzle`): seed + 단계로 장면을 만든다(같은 seed면 같은 그림 → 대결에서 모두 같은 그림). 벽 → 바닥 납작한 것 → 서 있는 것 순서로 그리고, 3px 칸 가림 계산으로 앞 그림 뒤의 선을 지운다(`_flatten`). 물건은 후보 48개 중 윤곽선이 장면 선과 맞닿는 비율(`_alignment`)이 단계의 `camo`에 맞는 자리에 숨긴다. `clear` 확률로 물건 안쪽 장면 선을 지운다.
 - `scripts/hidden_world.gd` (`HiddenWorld`): 그림을 그린다. 장면 선과 물건 선은 같은 색(`HIDDEN_INK`)·굵기. 확대·이동은 노드 scale/position으로 해서 다시 그리지 않는다. `scripts/shape_icon.gd`는 찾을 목록 칸의 물건 그림.
 - `scripts/hidden_game.gd`: 한 손가락 끌기 = 이동, 두 손가락 = 확대(PC는 휠), 톡 = 찾기. 엉뚱한 곳을 누르면 잠깐 못 누름(+혼자 하기는 시간 벌칙). 💡 힌트는 근처 동그라미만 보여 줌. 시작 전 3·2·1.
-- 혼자 하기: 단계(`[hidden] level`)와 단계별 최고 기록(`best_<n>`)을 `user://settings.cfg`에 저장. 난이도 표는 `Config.HIDDEN_STAGES`.
+- 혼자 하기(오락실 방식): 50단계. 난이도는 `Config.HIDDEN_STAGE_FIRST` → `HIDDEN_STAGE_LAST` 사이를 단계만큼 섞는다(`HiddenPuzzle.stage_settings`). 제한 시간(시간 막대), 하트 3개(실수하면 하나 줄어듦), 점수(찾기 + 연속 + 남은 시간·하트 보너스). 단계(`[hidden] level`)와 최고 총점(`best_score`)을 `user://settings.cfg`에 저장, 이어서 하는 총점은 `Net.hidden_run_score`.
+- 장면 3종: 교실(`_room`), 공원(`_park`), 넣어 둔 그림 파일(`_image_scene`). `assets/scenes/`에 png·jpg를 넣으면 그림의 어두운 선·색 경계를 선 자리로 읽어 그 위에 물건을 숨긴다(방법은 `assets/scenes/README.txt`).
 - 대결: `Net.start_match("hidden")`. 찾을 때마다 `Net.send_score`, 방장이 처음 다 찾은 사람을 `declare_winner`로 정함. 🏠로 나가면 점수 -1(그만둠).
 - `Net.match_mode`("blocks"/"hidden")로 어느 화면을 열지 정한다.
 

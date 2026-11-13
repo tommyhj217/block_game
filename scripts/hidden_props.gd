@@ -790,3 +790,278 @@ func rabbit() -> void:
 	dot(hc + Vector2(-7, -2), 2.5)
 	dot(hc + Vector2(7, -2), 2.5)
 	L([hc + Vector2(-3, 7), hc + Vector2(0, 9), hc + Vector2(3, 7)])
+
+
+# ═══════════════ 공원 ═══════════════
+
+func sun(r: float) -> void:
+	col("#ffd166")
+	# 햇살 (세모)
+	for i in range(12):
+		var a := TAU * i / 12.0
+		var d := Vector2.from_angle(a)
+		var n := d.orthogonal() * r * 0.16
+		shape([d * (r + 8) + n, d * (r + 8) - n, d * (r + R(30, 46))])
+	col("#ffe08a")
+	ellipse(Vector2.ZERO, Vector2(r, r))
+	dot(Vector2(-r * 0.3, -r * 0.1), 4)
+	dot(Vector2(r * 0.3, -r * 0.1), 4)
+	arc(Vector2(0, r * 0.15), Vector2(r * 0.4, r * 0.3), 20, 160, 10)
+
+
+func cloud(w: float) -> void:
+	col("#ffffff")
+	shape(bumpy_pts(Vector2.ZERO, Vector2(w / 2, w * 0.2), rng.randi_range(5, 8), 0.25))
+	arc(Vector2(-w * 0.15, 0), Vector2(w * 0.16, w * 0.08), 200, 320, 8)
+
+
+func house(w: float, h: float) -> void:
+	col(pick(PASTEL))
+	rect(-w / 2, -h, w / 2, 0)
+	col(pick(["#e76f51", "#bc4749", "#8e7dbe", "#4d96c9", "#b5653a"]))
+	shape([Vector2(-w / 2 - 16, -h), Vector2(0, -h - h * 0.6), Vector2(w / 2 + 16, -h)])
+	# 지붕 기와 줄
+	for k in range(1, 4):
+		var t := k / 4.0
+		L([Vector2(-(w / 2 + 16) * t, -h - h * 0.6 * (1.0 - t)), Vector2((w / 2 + 16) * t, -h - h * 0.6 * (1.0 - t))])
+	col(pick(WOOD))
+	rect(-w * 0.1, -h * 0.55, w * 0.1, 0)
+	dot(Vector2(w * 0.06, -h * 0.28), 3)
+	col("#bfe3f5")
+	for sx in [-0.32, 0.32]:
+		rect(w * sx - w * 0.1, -h * 0.75, w * sx + w * 0.1, -h * 0.4)
+		L([Vector2(w * sx, -h * 0.75), Vector2(w * sx, -h * 0.4)])
+		L([Vector2(w * sx - w * 0.1, -h * 0.575), Vector2(w * sx + w * 0.1, -h * 0.575)])
+	# 굴뚝
+	col(pick(["#b5653a", "#9aa5b1"]))
+	rect(w * 0.2, -h - h * 0.55, w * 0.32, -h - h * 0.2)
+
+
+func tree(h: float) -> void:
+	shadow(h * 0.22)
+	var trunk_w := h * 0.1
+	col(pick(["#9c6644", "#7f5539", "#b08968"]))
+	shape([Vector2(-trunk_w * 0.9, 0), Vector2(-trunk_w / 2, -h * 0.55), Vector2(trunk_w / 2, -h * 0.55), Vector2(trunk_w * 0.9, 0)])
+	for k in range(3):
+		arc(Vector2(0, -R(h * 0.08, h * 0.45)), Vector2(trunk_w * 0.3, 6), 200, 340, 5)
+	var green := pick(GREEN)
+	var c := Vector2(0, -h * 0.72)
+	var cr := h * 0.32
+	col(green)
+	shape(bumpy_pts(c, Vector2(cr, cr * 0.85), rng.randi_range(7, 10), 0.16))
+	# 잎 덩어리 무늬
+	for k in range(rng.randi_range(6, 10)):
+		var p := c + Vector2.from_angle(R(0, TAU)) * R(0, cr * 0.65)
+		var lr := R(10, 18)
+		var a0 := R(0, 360)
+		arc(p, Vector2(lr, lr * 0.8), a0, a0 + 200, 7)
+	# 열매 (동그란 열매 — 숨길 물건과 겹치지 않는 모양)
+	if chance(0.5):
+		col(pick(["#e63946", "#ff9f1c", "#f28482"]))
+		for k in range(rng.randi_range(2, 5)):
+			ellipse(c + Vector2.from_angle(R(0, TAU)) * R(cr * 0.2, cr * 0.7), Vector2(8, 8), true, 8)
+
+
+func bush(w: float) -> void:
+	shadow(w * 0.5)
+	col(pick(GREEN))
+	var pts := []
+	for p in bumpy_pts(Vector2(0, -w * 0.28), Vector2(w / 2, w * 0.3), 7, 0.2):
+		pts.append(Vector2(p.x, minf(p.y, 0.0)))   # 바닥 아래로 내려가지 않게
+	shape(pts)
+	for k in range(4):
+		var p := Vector2(R(-w * 0.3, w * 0.3), R(-w * 0.45, -w * 0.1))
+		arc(p, Vector2(12, 9), 190, 350, 6)
+	if chance(0.6):
+		col(pick(["#ffadad", "#ffffff", "#ffd166", "#ffc6ff"]))
+		for k in range(rng.randi_range(3, 6)):
+			ellipse(Vector2(R(-w * 0.35, w * 0.35), R(-w * 0.45, -w * 0.1)), Vector2(6, 6), true, 6)
+
+
+func bench(w: float) -> void:
+	shadow(w * 0.5, 12)
+	var wood := pick(WOOD)
+	col("#6b6b6b")
+	for x in [-w / 2 + 14, w / 2 - 22]:
+		rect(x, -60, x + 8, 0)
+	col(wood)
+	rect(-w / 2, -66, w / 2, -52)                 # 앉는 곳
+	for k in range(3):                            # 등받이 널빤지
+		rect(-w / 2, -130 + k * 22, w / 2, -114 + k * 22)
+	col("#6b6b6b")
+	rect(-w / 2 + 14, -130, -w / 2 + 22, -66)
+	rect(w / 2 - 22, -130, w / 2 - 14, -66)
+
+
+func duck() -> void:
+	shadow(34)
+	var body := pick(["#ffffff", "#ffe08a", "#f1e3d3"])
+	col("#ff9f1c")
+	shape([Vector2(-8, -6), Vector2(-20, 0), Vector2(0, 0)])
+	shape([Vector2(10, -6), Vector2(0, 0), Vector2(20, 0)])
+	col(body)
+	shape([Vector2(-34, -40), Vector2(-48, -56), Vector2(-30, -30), Vector2(-20, -8), Vector2(22, -8), Vector2(34, -30), Vector2(20, -50), Vector2(-10, -50)])
+	arc(Vector2(-6, -30), Vector2(18, 12), 20, 160, 6)
+	ellipse(Vector2(28, -62), Vector2(16, 15))
+	col("#ff9f1c")
+	shape([Vector2(42, -64), Vector2(60, -58), Vector2(42, -54)])
+	dot(Vector2(32, -66), 2.5)
+
+
+func slide(h: float) -> void:
+	shadow(h * 0.6, 14)
+	var c := pick(BRIGHT)
+	# 사다리
+	col("#8d8d99")
+	rect(-h * 0.5, -h, -h * 0.5 + 8, 0)
+	rect(-h * 0.5 + 44, -h, -h * 0.5 + 52, 0)
+	for k in range(5):
+		L([Vector2(-h * 0.5 + 8, -h * 0.15 - k * h * 0.17), Vector2(-h * 0.5 + 44, -h * 0.15 - k * h * 0.17)])
+	# 미끄러지는 판
+	col(c)
+	shape([Vector2(-h * 0.5 + 52, -h * 0.9), Vector2(-h * 0.5 + 52, -h * 0.76), Vector2(h * 0.45, -8), Vector2(h * 0.62, -8), Vector2(h * 0.62, -20), Vector2(h * 0.48, -22)])
+	col(c.lightened(0.25))
+	shape([Vector2(-h * 0.5 - 6, -h - 4), Vector2(-h * 0.5 + 58, -h - 4), Vector2(-h * 0.5 + 58, -h * 0.9), Vector2(-h * 0.5 - 6, -h * 0.9)])
+
+
+func street_lamp(h: float) -> void:
+	shadow(26)
+	col("#5c677d")
+	ellipse(Vector2(0, -6), Vector2(20, 7))
+	rect(-5, -h * 0.85, 5, -6)
+	col("#fff3b0")
+	shape([Vector2(-22, -h * 0.85), Vector2(22, -h * 0.85), Vector2(16, -h), Vector2(-16, -h)])
+	col("#5c677d")
+	shape([Vector2(-20, -h), Vector2(20, -h), Vector2(0, -h - 18)])
+
+
+func balloons() -> void:
+	# 바닥의 돌에 묶인 풍선 다발
+	shadow(20)
+	col("#9aa5b1")
+	ellipse(Vector2(0, -8), Vector2(16, 9))
+	for i in range(rng.randi_range(3, 5)):
+		var top := Vector2(R(-60, 60), -R(170, 260))
+		L([Vector2(0, -12), Vector2(top.x * 0.4, top.y * 0.5), top + Vector2(0, 30)])
+		col(pick(BRIGHT))
+		ellipse(top, Vector2(24, 30))
+		shape([top + Vector2(-5, 34), top + Vector2(5, 34), top + Vector2(0, 28)])
+		arc(top + Vector2(-8, -8), Vector2(8, 12), 180, 260, 4)
+
+
+func sandbox(w: float) -> void:
+	var wood := pick(WOOD)
+	col(wood)
+	shape([Vector2(-w / 2, 0), Vector2(w / 2, 0), Vector2(w / 2 - 36, -w * 0.3), Vector2(-w / 2 + 36, -w * 0.3)])
+	col("#f3e1b0")
+	shape([Vector2(-w / 2 + 22, -10), Vector2(w / 2 - 22, -10), Vector2(w / 2 - 48, -w * 0.3 + 8), Vector2(-w / 2 + 48, -w * 0.3 + 8)])
+	# 모래 더미와 양동이
+	shape(arc_pts(Vector2(-w * 0.15, -18), Vector2(40, 34), 180, 360, 8))
+	col(pick(BRIGHT))
+	shape([Vector2(w * 0.1, -50), Vector2(w * 0.1 + 34, -50), Vector2(w * 0.1 + 28, -16), Vector2(w * 0.1 + 6, -16)])
+	arc(Vector2(w * 0.1 + 17, -50), Vector2(17, 18), 180, 360, 8)
+
+
+func sign() -> void:
+	shadow(22)
+	col(pick(WOOD))
+	rect(-5, -120, 5, 0)
+	col(pick(PASTEL))
+	rect(-56, -150, 56, -90)
+	L([Vector2(-40, -130), Vector2(40, -130)])
+	L([Vector2(-40, -112), Vector2(20, -112)])
+
+
+func bike() -> void:
+	shadow(70, 12)
+	var c := pick(BRIGHT)
+	col("#f5f0e6")
+	for x in [-50.0, 50.0]:
+		ellipse(Vector2(x, -32), Vector2(32, 32))
+		col("#dcd6c8")
+		ellipse(Vector2(x, -32), Vector2(24, 24))
+		for k in range(4):
+			var a := TAU * k / 8.0
+			L([Vector2(x, -32) + Vector2.from_angle(a) * 24, Vector2(x, -32) - Vector2.from_angle(a) * 24])
+		col("#f5f0e6")
+	# 몸체 (선으로)
+	col(c)
+	shape([Vector2(-50, -32), Vector2(-14, -80), Vector2(-6, -80), Vector2(-40, -30)])
+	shape([Vector2(-14, -80), Vector2(34, -80), Vector2(8, -30), Vector2(0, -34)])
+	shape([Vector2(34, -84), Vector2(42, -84), Vector2(54, -32), Vector2(46, -32)])
+	col("#3a3a3a")
+	rect(-28, -92, 0, -84)                        # 안장
+	L([Vector2(38, -84), Vector2(34, -104), Vector2(52, -108)])   # 손잡이
+
+
+func fence(w: float) -> void:
+	var wood := pick(["#f5f0e6", "#e8d8b8", "#d9a86c"])
+	col(wood)
+	rect(-w / 2, -66, w / 2, -56)
+	rect(-w / 2, -30, w / 2, -20)
+	var x := -w / 2 + 10
+	while x < w / 2 - 20:
+		shape([Vector2(x, 0), Vector2(x, -86), Vector2(x + 10, -100), Vector2(x + 20, -86), Vector2(x + 20, 0)])
+		x += 52
+
+
+func pond(w: float) -> void:
+	col("#a8dcf0")
+	shape(bumpy_pts(Vector2.ZERO, Vector2(w / 2, w * 0.16), 9, 0.06))
+	for i in range(rng.randi_range(3, 6)):
+		arc(Vector2(R(-w * 0.3, w * 0.3), R(-w * 0.08, w * 0.08)), Vector2(R(18, 34), 5), 190, 350, 6)
+	# 연잎
+	col("#83b366")
+	for i in range(rng.randi_range(2, 4)):
+		var c := Vector2(R(-w * 0.3, w * 0.3), R(-w * 0.07, w * 0.07))
+		var pts := arc_pts(c, Vector2(22, 11), 20, 340, 10)
+		pts.append(c)
+		shape(pts)
+
+
+func picnic_mat(w: float) -> void:
+	var c := pick(BRIGHT)
+	col(c)
+	var pts := [Vector2(-w / 2, 0), Vector2(w / 2 - 30, 10), Vector2(w / 2, -w * 0.22), Vector2(-w / 2 + 40, -w * 0.26)]
+	shape(pts)
+	# 격자 무늬
+	for k in range(1, 4):
+		var t := k / 4.0
+		L([pts[0].lerp(pts[1], t), pts[3].lerp(pts[2], t)])
+		L([pts[0].lerp(pts[3], t), pts[1].lerp(pts[2], t)])
+	# 접시와 샌드위치
+	col(PAPER)
+	ellipse(Vector2(-w * 0.1, -w * 0.1), Vector2(26, 10))
+	col("#f3d9a4")
+	shape([Vector2(-w * 0.1 - 14, -w * 0.1 - 2), Vector2(-w * 0.1 + 14, -w * 0.1 - 2), Vector2(-w * 0.1, -w * 0.1 - 18)])
+
+
+func flower_patch() -> void:
+	for i in range(rng.randi_range(2, 4)):
+		var base := Vector2(R(-40, 40), R(-6, 6))
+		var top := base + Vector2(R(-10, 10), -R(34, 60))
+		L([base, top])
+		col(pick(GREEN))
+		shape([base.lerp(top, 0.3), base.lerp(top, 0.3) + Vector2(16, -10), base.lerp(top, 0.3) + Vector2(22, -2)])
+		col(pick(["#ffadad", "#ffd166", "#ffc6ff", "#ffffff", "#a0c4ff", "#f28482"]))
+		shape(bumpy_pts(top, Vector2(11, 11), 5, 0.4))
+		col("#ffd166")
+		ellipse(top, Vector2(4, 4), true, 6)
+
+
+func rock(r: float) -> void:
+	col(pick(["#c9c4b8", "#b8b2a7", "#d6d1c4"]))
+	var pts := []
+	var n := rng.randi_range(6, 8)
+	for k in range(n):
+		var a := TAU * k / n
+		pts.append(Vector2(cos(a) * r * R(0.8, 1.1), -r * 0.55 + sin(a) * r * 0.6 * R(0.8, 1.1)))
+	shape(pts)
+	L([Vector2(-r * 0.3, -r * 0.8), Vector2(0, -r * 0.55), Vector2(r * 0.15, -r * 0.3)])
+
+
+func grass_tuft() -> void:
+	col(pick(GREEN))
+	for i in range(rng.randi_range(3, 5)):
+		var x := R(-24, 24)
+		shape([Vector2(x - 5, 0), Vector2(x + 5, 0), Vector2(x + R(-12, 12), -R(22, 40))])

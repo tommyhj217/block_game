@@ -40,6 +40,14 @@ var countdown := float(Config.HIDDEN_COUNTDOWN)
 var started := false
 var finished := false
 var scores := {}             # 대결: 아이디 → 찾은 개수
+# 오락실 방식 (혼자 하기): 제한 시간 안에 하트를 다 잃지 않고 모두 찾아야 한다
+var time_limit := 60.0       # 이 단계의 제한 시간(초)
+var time_left := 60.0        # 남은 시간(초)
+var hearts := Config.HIDDEN_HEARTS
+var score := 0               # 이 단계에서 얻은 점수
+var combo := 0               # 실수 없이 연달아 찾은 수
+var time_bar: ColorRect      # 남은 시간 막대
+var time_bar_bg: ColorRect
 var _touches := {}           # 손가락 번호 → 지금 위치
 var _taps := {}              # 손가락 번호 → {"pos": 시작 위치, "time": 시작 시각, "moved": 끌었는지}
 
@@ -49,6 +57,8 @@ func _ready() -> void:
 	practice = Net.is_practice()
 	level = _load_level() if practice else Config.HIDDEN_BATTLE_STAGE
 	puzzle = HiddenPuzzle.make(Net.match_seed, level)
+	time_limit = HiddenPuzzle.stage_settings(level)["time"]
+	time_left = time_limit
 	for id in Net.match_players:
 		scores[id] = 0
 
@@ -94,9 +104,22 @@ func _build_ui() -> void:
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title_label.position.x = 124
 	time_label.size.x = 470
-	score_label = _label("", 24, Vector2(110, 54), Vector2(490, 50))
+	score_label = _label("", 24, Vector2(110, 48), Vector2(490, 40))
 	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	score_label.clip_text = true
+	# 남은 시간 막대 (혼자 하기에서만 보임)
+	time_bar_bg = ColorRect.new()
+	time_bar_bg.color = Color("#2a3042")
+	time_bar_bg.position = Vector2(120, 90)
+	time_bar_bg.size = Vector2(470, 14)
+	time_bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	time_bar_bg.visible = practice
+	stage.add_child(time_bar_bg)
+	time_bar = ColorRect.new()
+	time_bar.color = Color("#5ad17a")
+	time_bar.size = time_bar_bg.size
+	time_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	time_bar_bg.add_child(time_bar)
 
 	# 그림 창: clip_contents = 자기 영역 밖에 그려지는 자식은 잘라서 안 보이게 한다
 	view = Control.new()
@@ -326,6 +349,11 @@ func _found(t: int) -> void:
 	_vibrate(30)
 	var count := puzzle.found_count()
 	if practice:
+		# 점수: 기본 점수 + 실수 없이 연달아 찾을수록 더 많이
+		combo += 1
+		var gain := Config.HIDDEN_FIND_SCORE + Config.HIDDEN_COMBO_SCORE * (combo - 1)
+		score += gain
+		fx.float_text("+%d" % gain, from - Vector2(0, 100), Color("#ffd84a"), 40, 0.8)
 		if count == puzzle.targets.size():
 			_solo_clear()
 	else:
@@ -336,9 +364,15 @@ func _found(t: int) -> void:
 func _miss(at: Vector2) -> void:
 	misses += 1
 	if practice:
-		penalty += Config.HIDDEN_MISS_PENALTY
-		fx.float_text("+%d초" % int(Config.HIDDEN_MISS_PENALTY), at - Vector2(0, 50), Color("#ff9a9a"), 36, 0.8)
+		# 하트가 하나 줄고 연속 기록이 끊긴다. 하트가 다 없어지면 게임 끝
+		hearts -= 1
+		combo = 0
+		fx.float_text("💔", at - Vector2(0, 60), Color.WHITE, 56, 0.8)
 		freeze_left = Config.HIDDEN_MISS_FREEZE
+		if hearts <= 0:
+			_refresh_top()
+			_game_over("하트가 다 없어졌어요")
+			return
 	else:
 		freeze_left = Config.HIDDEN_BATTLE_MISS_FREEZE
 	fx.float_text("✖", at, Color("#ff5a5a"), 72, 0.6)
@@ -371,8 +405,9 @@ func _use_hint() -> void:
 	world.position = view.size / 2.0 - world.hint_pos * zoom
 	_clamp_pan()
 	if practice:
-		penalty += Config.HIDDEN_HINT_PENALTY
-		fx.float_text("+%d초" % int(Config.HIDDEN_HINT_PENALTY), Vector2(600, 150), Color("#ffd84a"), 40)
+		# 힌트를 쓰면 남은 시간이 줄어든다
+		time_left = maxf(time_left - Config.HIDDEN_HINT_PENALTY, 1.0)
+		fx.float_text("-%d초" % int(Config.HIDDEN_HINT_PENALTY), Vector2(600, 150), Color("#ffd84a"), 40)
 	Sfx.play("item_use")
 	_refresh_top()
 
@@ -407,12 +442,34 @@ func _process(delta: float) -> void:
 		freeze_left -= delta
 		if freeze_left <= 0.0:
 			view.modulate = Color.WHITE
+	if practice:
+		# 제한 시간이 줄어든다. 얼마 안 남으면 1초마다 똑딱 소리
+		var before := ceili(time_left)
+		time_left -= delta
+		if time_left <= Config.HIDDEN_LOW_TIME and ceili(time_left) != before:
+			Sfx.play("danger", 1.2, 2.0)
+		if time_left <= 0.0:
+			time_left = 0.0
+			_refresh_time()
+			_game_over("시간이 다 됐어요")
+			return
 	_refresh_time()
 
 
 func _refresh_time() -> void:
-	var total := elapsed + penalty
-	time_label.text = "⏱ %02d:%02d" % [int(total) / 60, int(total) % 60]
+	if practice:
+		# 하트와 남은 시간 막대 (얼마 안 남으면 빨갛게 깜빡임)
+		time_label.text = "❤".repeat(maxi(hearts, 0)) + "🖤".repeat(Config.HIDDEN_HEARTS - maxi(hearts, 0))
+		var ratio := clampf(time_left / time_limit, 0.0, 1.0)
+		time_bar.size.x = time_bar_bg.size.x * ratio
+		if time_left <= Config.HIDDEN_LOW_TIME:
+			time_bar.color = Color("#ff5a5a") if int(time_left * 4.0) % 2 == 0 else Color("#ffb0b0")
+		elif ratio < 0.5:
+			time_bar.color = Color("#ffd84a")
+		else:
+			time_bar.color = Color("#5ad17a")
+		return
+	time_label.text = "⏱ %02d:%02d" % [int(elapsed) / 60, int(elapsed) % 60]
 
 
 func _refresh_top() -> void:
@@ -420,7 +477,7 @@ func _refresh_top() -> void:
 	_refresh_time()
 	var total := puzzle.targets.size()
 	if practice:
-		score_label.text = "찾음 %d/%d   실수 %d" % [puzzle.found_count(), total, misses]
+		score_label.text = "점수 %d   찾음 %d/%d" % [Net.hidden_run_score + score, puzzle.found_count(), total]
 	else:
 		# 대결: 모두의 찾은 개수 (나 먼저)
 		var parts := ["나 %d" % scores.get(my_id, 0)]
@@ -483,24 +540,42 @@ func _load_level() -> int:
 
 func _solo_clear() -> void:
 	finished = true
-	var total := elapsed + penalty
+	# 단계 보너스: 남은 시간과 남은 하트만큼 점수를 더 준다
+	var time_bonus := int(time_left) * Config.HIDDEN_TIME_SCORE
+	var heart_bonus := hearts * Config.HIDDEN_HEART_SCORE
+	var stage_total := score + time_bonus + heart_bonus
+	Net.hidden_run_score += stage_total   # 이어서 하는 동안 쌓이는 총점
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS_PATH)
-	var key := "best_%d" % level
-	var best: float = cfg.get_value("hidden", key, 0.0)
-	var new_record := best <= 0.0 or total < best
+	var best: int = cfg.get_value("hidden", "best_score", 0)
+	var new_record := Net.hidden_run_score > best
 	if new_record:
-		cfg.set_value("hidden", key, total)
-		best = total
+		cfg.set_value("hidden", "best_score", Net.hidden_run_score)
+		best = Net.hidden_run_score
 	cfg.set_value("hidden", "level", level + 1)   # 다음 단계 열기
 	cfg.save(SETTINGS_PATH)
 	Sfx.play("clear4")
 	for i in range(5):
 		fx.burst(Vector2(randf_range(150, 570), randf_range(300, 800)), Color.from_hsv(randf(), 0.7, 1.0), 16, 420.0)
-	var text := "🎉 다 찾았어요!\n⏱ %s" % _fmt(total)
-	text += "\n실수 %d · 힌트 %d" % [misses, Config.HIDDEN_HINTS - hints_left]
-	text += "\n🌟 최고 기록!" if new_record else "\n최고 기록 %s" % _fmt(best)
+	var text := "🎉 %d단계 성공!" % (level + 1)
+	text += "\n찾기 %d + ⏱ %d + ❤ %d" % [score, time_bonus, heart_bonus]
+	text += "\n총점 %d" % Net.hidden_run_score
+	text += "\n🌟 최고 점수!" if new_record else "\n최고 점수 %d" % best
 	_show_result(text)
+
+
+# 시간이 다 되거나 하트를 다 잃었다: 못 찾은 물건을 보여 주고 같은 단계를 다시 하게 한다
+func _game_over(reason: String) -> void:
+	finished = true
+	view.modulate = Color.WHITE
+	world.reveal_all = true
+	world.hint_on = false
+	world.queue_redraw()
+	Sfx.play("lose")
+	_vibrate(200)
+	var text := "💥 게임 끝\n%s\n%d개 중 %d개 찾았어요\n총점 %d" % [reason, puzzle.targets.size(), puzzle.found_count(), Net.hidden_run_score + score]
+	Net.hidden_run_score = 0   # 총점은 처음부터 다시
+	_show_result(text, true)
 
 
 func _fmt(sec: float) -> String:
@@ -515,7 +590,7 @@ func _on_home() -> void:
 
 # ═══════════════ 결과 화면 ═══════════════
 
-func _show_result(text: String) -> void:
+func _show_result(text: String, failed: bool = false) -> void:
 	overlay = ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.55)
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -535,7 +610,7 @@ func _show_result(text: String) -> void:
 	title.add_theme_constant_override("outline_size", 10)
 	box.add_child(title)
 	if practice:
-		box.add_child(_result_button("다음 단계 ▶", func(): Net.start_practice("hidden")))
+		box.add_child(_result_button("다시 하기" if failed else "다음 단계 ▶", func(): Net.start_practice("hidden")))
 		box.add_child(_result_button("정답 보기", _close_overlay_to_view))
 		box.add_child(_result_button("처음으로", func(): get_tree().change_scene_to_file(Net.LOBBY_SCENE)))
 	else:

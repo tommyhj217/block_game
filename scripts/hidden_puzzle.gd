@@ -22,6 +22,7 @@ const CANDIDATES := 48     # 물건 하나당 시험해 보는 자리 후보 수
 
 var world_size := Config.HIDDEN_WORLD
 var lines: Array = []      # 최종 선들 (PackedVector2Array 목록, 가려진 부분은 이미 지워짐)
+var fills: Array = []      # 색칠 모양들 {"poly", "color"} — 뒤에서 앞 순서. 이 순서대로 칠하면 앞 그림이 뒤를 덮는다
 # 찾을 물건: {"shape", "name", "pos", "size", "rot", "flip", "strokes"(그림 좌표 선 목록), "found"}
 var targets := []
 
@@ -102,13 +103,28 @@ func _room() -> void:
 	_wall_h = h * _rng.randf_range(0.27, 0.31)
 	_props.begin(Vector2.ZERO, 1.0)
 	var P := _props
+	# 벽, 걸레받이 색 (판마다 다른 색)
+	var wall_c := P.pick(["#fbe7c6", "#d8f0e4", "#dcecf9", "#f9e0e6", "#ece4f7", "#fdf3c4"])
+	var floor_c := P.pick(["#e2b983", "#d9a86c", "#e8c79a", "#cfa070"])
+	P.col(wall_c)
+	P.F([Vector2(0, 0), Vector2(w, 0), Vector2(w, _wall_h), Vector2(0, _wall_h)])
+	P.col(wall_c.darkened(0.25))
+	P.F([Vector2(0, _wall_h - 24), Vector2(w, _wall_h - 24), Vector2(w, _wall_h), Vector2(0, _wall_h)])
+	# 벽지 줄무늬: 한 칸 걸러 조금 진하게
+	var stripe := 0
+	var sx0 := 0.0
+	while sx0 < w:
+		if stripe % 2 == 0:
+			P.col(wall_c.darkened(0.06))
+			P.F([Vector2(sx0, 0), Vector2(sx0 + 60, 0), Vector2(sx0 + 60, _wall_h - 24), Vector2(sx0, _wall_h - 24)])
+		sx0 += 60
+		stripe += 1
 	P.L([Vector2(0, _wall_h), Vector2(w, _wall_h)])
 	P.L([Vector2(0, _wall_h - 24), Vector2(w, _wall_h - 24)])   # 걸레받이
 	# 벽지: 세로 줄과 작은 무늬
-	var x := _rng.randf_range(20, 60)
+	var x := 0.0
 	var motif := _rng.randi_range(0, 2)
 	while x < w:
-		P.L([Vector2(x, 0), Vector2(x, _wall_h - 24)])
 		var y := _rng.randf_range(20, 50)
 		while y < _wall_h - 50:
 			var c := Vector2(x + 30, y)
@@ -124,11 +140,16 @@ func _room() -> void:
 	while y < h:
 		var gap := lerpf(45, 115, (y - _wall_h) / (h - _wall_h))
 		var ny := y + gap
-		P.L([Vector2(0, ny), Vector2(w, ny)])
-		var sx := _rng.randf_range(0, 250)
+		# 마루 널빤지: 이음매마다 나무 색을 조금씩 다르게 칠한다
+		var sx := -_rng.randf_range(0, 250)
 		while sx < w:
-			P.L([Vector2(sx, y), Vector2(sx, ny)])
-			sx += _rng.randf_range(260, 420)
+			var nx := sx + _rng.randf_range(260, 420)
+			P.col(floor_c.lerp(Color("#fff3dc"), _rng.randf_range(0.0, 0.3)))
+			P.F([Vector2(maxf(sx, 0), y), Vector2(minf(nx, w), y), Vector2(minf(nx, w), minf(ny, h)), Vector2(maxf(sx, 0), minf(ny, h))])
+			if sx > 0:
+				P.L([Vector2(sx, y), Vector2(sx, ny)])
+			sx = nx
+		P.L([Vector2(0, ny), Vector2(w, ny)])
 		y = ny
 		row += 1
 	_layer()
@@ -269,8 +290,13 @@ func _flatten() -> void:
 	owner.resize(ow * oh)
 	owner.fill(-1)
 	for i in range(_layers.size()):
-		for poly in _layers[i]["fills"]:
-			_raster_poly(poly, i, owner, ow, oh)
+		for f in _layers[i]["fills"]:
+			# 그림자처럼 비치는 색칠(ghost)은 뒤의 선을 가리지 않는다
+			if not f["ghost"]:
+				_raster_poly(f["poly"], i, owner, ow, oh)
+			# 화면에 칠할 수 있는 모양(세모로 나눌 수 있는 모양)만 색칠 목록에 넣는다
+			if not Geometry2D.triangulate_polygon(f["poly"]).is_empty():
+				fills.append(f)
 	lines = []
 	for i in range(_layers.size()):
 		for stroke in _layers[i]["strokes"]:

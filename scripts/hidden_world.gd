@@ -25,8 +25,10 @@ func set_puzzle(p: HiddenPuzzle) -> void:
 func _draw() -> void:
 	if puzzle == null:
 		return
-	# 흰 종이 바탕 (흑백 선 그림)
+	# 종이 바탕, 그 위에 색칠 모양을 뒤에서 앞 순서로 칠한다 (앞 그림이 뒤 그림을 덮는다)
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#fdfcf7"))
+	for f in puzzle.fills:
+		draw_colored_polygon(f["poly"], f["color"])
 	# 장면 선
 	var ink := Config.HIDDEN_INK
 	var w := Config.HIDDEN_INK_WIDTH

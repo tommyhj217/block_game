@@ -24,7 +24,8 @@
 - `scripts/net.gd` (autoload `Net`): ENet 연결(방장 = 서버, 아이디 1). 방 찾기는 손님이 UDP `FIND`를 브로드캐스트하고 방장이 `ROOM`으로 답장. 게임 중에는 각자 자기 판을 계산하고 판 모양(`_state`, 0.1초 간격 + 1초마다), 공격(`_attack`), 탈락(`_out`)만 주고받는다.
 
 ## 숨은그림 찾기 (성인 난이도)
-- 잡지 숨은그림·월리를 찾아라 방식: 한 장의 빽빽한 흑백 선 그림 장면 안에 물건을 같은 선으로 숨긴다.
+- 잡지 숨은그림·월리를 찾아라 방식: 한 장의 빽빽한 색칠 일러스트 장면 안에 물건을 장면과 같은 선으로 숨긴다.
+- 색칠: 소품은 `col(색)`으로 칠하고(`HiddenProps`의 BRIGHT·PASTEL·WOOD·SKIN·HAIR 색 모음), `HiddenPuzzle.fills`에 뒤→앞 순서로 모인다. `HiddenWorld`가 색칠을 먼저 칠하고 그 위에 선을 그린다. 그림자(`shadow`)는 ghost 색칠이라 뒤의 선을 가리지 않는다.
 - `scripts/hidden_props.gd` (`HiddenProps`): 장면 소품 선 그림(아이들, 동물, 책장, 책상, 의자, 화분, 상자, 책, 벽 장식…). 소품마다 "채우기(종이색, 뒤를 가림) + 선". 숨길 물건과 같은 모양의 소품은 넣지 않는다.
 - `scripts/hidden_shapes.gd` (`HiddenShapes`): 숨길 물건 33개의 선 그림(-0.5~0.5 좌표)과 한글 이름.
 - `scripts/hidden_puzzle.gd` (`HiddenPuzzle`): seed + 단계로 장면을 만든다(같은 seed면 같은 그림 → 대결에서 모두 같은 그림). 벽 → 바닥 납작한 것 → 서 있는 것 순서로 그리고, 3px 칸 가림 계산으로 앞 그림 뒤의 선을 지운다(`_flatten`). 물건은 후보 48개 중 윤곽선이 장면 선과 맞닿는 비율(`_alignment`)이 단계의 `camo`에 맞는 자리에 숨긴다. `clear` 확률로 물건 안쪽 장면 선을 지운다.

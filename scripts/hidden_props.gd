@@ -1303,3 +1303,410 @@ func tiny_city(h: float) -> void:
 			L([Vector2(x + h * 0.03, y), Vector2(x + h * 0.08, y)])
 			y += 10
 	L([Vector2(0, -h), Vector2(0, -h - 14)])
+
+
+
+# ═══════════════ 낙서 공통 (작은 채움 그림) ═══════════════
+
+func tiny_ring(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r), true, 8)
+
+
+func tiny_dot(r: float) -> void:
+	dot(Vector2.ZERO, maxf(r * 0.4, 2.0))
+
+
+# ═══════════════ 바닷속 낙서 (흑백 선 그림) ═══════════════
+# 숨길 물건과 겹치는 모양(물고기, 별 모양 불가사리)은 쓰지 않는다.
+
+func bubble(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r), true, 12)
+	arc(Vector2.ZERO, Vector2(r * 0.62, r * 0.62), 190, 260, 4)
+
+
+func jellyfish(r: float) -> void:
+	col(BG)
+	# 흐느적거리는 다리
+	for k in range(5):
+		var x := (k - 2) * r * 0.35
+		var pts := []
+		for i in range(8):
+			pts.append(Vector2(x + sin(i * 1.3 + k) * r * 0.12, i * r * 0.25))
+		L(pts)
+	shape(arc_pts(Vector2.ZERO, Vector2(r, r * 0.9), 180, 360, 12))
+	for k in range(4):
+		arc(Vector2(-r * 0.75 + k * r * 0.5, 0), Vector2(r * 0.25, r * 0.14), 0, 180, 4)
+	dot(Vector2(-r * 0.3, -r * 0.42), 2.5)
+	dot(Vector2(r * 0.3, -r * 0.42), 2.5)
+	arc(Vector2(0, -r * 0.3), Vector2(r * 0.2, r * 0.12), 20, 160, 4)
+
+
+func octopus(r: float) -> void:
+	col(BG)
+	for k in range(6):
+		var a := lerpf(-1.0, 1.0, k / 5.0)
+		var pts := []
+		for i in range(7):
+			pts.append(Vector2(a * r * (0.6 + i * 0.13) + sin(i * 1.5 + k) * r * 0.1, r * 0.3 + i * r * 0.2))
+		L(pts)
+	ellipse(Vector2(0, -r * 0.2), Vector2(r * 0.85, r * 0.8))
+	for s in [-1.0, 1.0]:
+		ellipse(Vector2(s * r * 0.3, -r * 0.25), Vector2(r * 0.14, r * 0.17), true, 8)
+		dot(Vector2(s * r * 0.3, -r * 0.22), 2.5)
+	arc(Vector2(0, r * 0.1), Vector2(r * 0.22, r * 0.14), 20, 160, 5)
+	for k in range(3):
+		ellipse(Vector2(R(-r * 0.5, r * 0.5), -r * R(0.6, 0.85)), Vector2(4, 4), false, 6)
+
+
+func whale(w: float) -> void:
+	col(BG)
+	shape([Vector2(w * 0.36, -w * 0.02), Vector2(w * 0.52, -w * 0.2), Vector2(w * 0.47, -w * 0.02), Vector2(w * 0.54, w * 0.12), Vector2(w * 0.36, w * 0.06)])
+	ellipse(Vector2(-w * 0.05, 0), Vector2(w * 0.45, w * 0.22), true, 20)
+	arc(Vector2(-w * 0.15, w * 0.05), Vector2(w * 0.3, w * 0.12), 10, 170, 8)
+	for k in range(3):
+		L([Vector2(-w * 0.3 + k * w * 0.07, w * 0.13), Vector2(-w * 0.28 + k * w * 0.07, w * 0.18)])
+	dot(Vector2(-w * 0.34, -w * 0.04), 2.5)
+	L([Vector2(-w * 0.1, -w * 0.22), Vector2(-w * 0.1, -w * 0.34)])
+	arc(Vector2(-w * 0.16, -w * 0.34), Vector2(w * 0.06, w * 0.06), 180, 360, 5)
+	arc(Vector2(-w * 0.04, -w * 0.34), Vector2(w * 0.06, w * 0.06), 180, 360, 5)
+	shape([Vector2(-w * 0.1, w * 0.12), Vector2(0, w * 0.3), Vector2(w * 0.06, w * 0.14)])
+
+
+func submarine(w: float) -> void:
+	col(BG)
+	rect(-w * 0.08, -w * 0.3, w * 0.08, -w * 0.14)
+	L([Vector2(0, -w * 0.3), Vector2(0, -w * 0.42), Vector2(w * 0.1, -w * 0.42)])
+	shape([Vector2(w * 0.43, 0), Vector2(w * 0.54, -w * 0.1), Vector2(w * 0.54, w * 0.1)])
+	ellipse(Vector2.ZERO, Vector2(w * 0.45, w * 0.17), true, 18)
+	for k in range(-1, 2):
+		ellipse(Vector2(k * w * 0.2, 0), Vector2(w * 0.06, w * 0.06), false, 8)
+	L([Vector2(-w * 0.36, -w * 0.1), Vector2(-w * 0.36, w * 0.1)])
+
+
+func crab(w: float) -> void:
+	col(BG)
+	for s in [-1.0, 1.0]:
+		for k in range(3):
+			L([Vector2(s * w * 0.25, w * 0.05 + k * w * 0.03), Vector2(s * w * 0.42, w * 0.12 + k * w * 0.06), Vector2(s * w * 0.46, w * 0.22 + k * w * 0.05)])
+		L([Vector2(s * w * 0.25, -w * 0.08), Vector2(s * w * 0.4, -w * 0.22)])
+		ellipse(Vector2(s * w * 0.42, -w * 0.28), Vector2(w * 0.09, w * 0.07), true, 8)
+		L([Vector2(s * w * 0.42, -w * 0.28), Vector2(s * w * 0.5, -w * 0.3)])
+		L([Vector2(s * w * 0.1, -w * 0.16), Vector2(s * w * 0.12, -w * 0.26)])
+		dot(Vector2(s * w * 0.12, -w * 0.28), 3)
+	ellipse(Vector2.ZERO, Vector2(w * 0.3, w * 0.18), true, 14)
+	arc(Vector2(0, w * 0.02), Vector2(w * 0.1, w * 0.06), 20, 160, 5)
+
+
+# 소라 (소용돌이 껍데기)
+func shell(r: float) -> void:
+	col(BG)
+	ellipse(Vector2.ZERO, Vector2(r, r * 0.85), true, 14)
+	var pts := []
+	for k in range(16):
+		var a := k * 0.6
+		pts.append(Vector2(cos(a), sin(a) * 0.85) * (r * 0.06 * k))
+	L(pts)
+	shape([Vector2(r * 0.7, r * 0.5), Vector2(r * 1.3, r * 0.75), Vector2(r * 0.3, r * 0.8)])
+
+
+func turtle(w: float) -> void:
+	col(BG)
+	for p in [Vector2(-0.2, -0.2), Vector2(0.2, -0.2), Vector2(-0.22, 0.2), Vector2(0.18, 0.2)]:
+		var q: Vector2 = p
+		ellipse(q * w, Vector2(w * 0.12, w * 0.07), true, 8)
+	ellipse(Vector2(-w * 0.38, 0), Vector2(w * 0.11, w * 0.09), true, 10)
+	dot(Vector2(-w * 0.42, -w * 0.02), 2.5)
+	shape([Vector2(w * 0.28, -w * 0.03), Vector2(w * 0.4, 0), Vector2(w * 0.28, w * 0.03)])
+	ellipse(Vector2.ZERO, Vector2(w * 0.3, w * 0.22), true, 14)
+	ellipse(Vector2.ZERO, Vector2(w * 0.14, w * 0.1), false, 6)
+	for k in range(6):
+		var d := Vector2.from_angle(TAU * k / 6.0)
+		L([Vector2(d.x * w * 0.14, d.y * w * 0.1), Vector2(d.x * w * 0.3, d.y * w * 0.22)])
+
+
+func anchor(h: float) -> void:
+	col(BG)
+	ellipse(Vector2(0, -h * 0.42), Vector2(h * 0.08, h * 0.08), true, 8)
+	L([Vector2(0, -h * 0.34), Vector2(0, h * 0.4)])
+	L([Vector2(-h * 0.18, -h * 0.2), Vector2(h * 0.18, -h * 0.2)])
+	arc(Vector2(0, h * 0.1), Vector2(h * 0.32, h * 0.3), 0, 180, 10)
+	L([Vector2(-h * 0.4, h * 0.16), Vector2(-h * 0.32, h * 0.02), Vector2(-h * 0.24, h * 0.16)])
+	L([Vector2(h * 0.4, h * 0.16), Vector2(h * 0.32, h * 0.02), Vector2(h * 0.24, h * 0.16)])
+
+
+# 보물 상자
+func chest(w: float) -> void:
+	col(BG)
+	rect(-w / 2, -w * 0.05, w / 2, w * 0.3)
+	shape(arc_pts(Vector2(0, -w * 0.05), Vector2(w / 2, w * 0.28), 180, 360, 10))
+	for s in [-1.0, 1.0]:
+		L([Vector2(s * w * 0.3, -w * 0.27), Vector2(s * w * 0.3, w * 0.3)])
+	rect(-w * 0.07, -w * 0.1, w * 0.07, w * 0.06)
+	dot(Vector2(0, -w * 0.02), 2.5)
+
+
+func seahorse(h: float) -> void:
+	col(BG)
+	shape([Vector2(-0.08, -0.25) * h, Vector2(0.1, -0.28) * h, Vector2(0.16, -0.05) * h, Vector2(0.1, 0.15) * h,
+			Vector2(0.02, 0.28) * h, Vector2(-0.04, 0.2) * h, Vector2(0.02, 0.05) * h, Vector2(-0.04, -0.1) * h])
+	var tail := []
+	for k in range(10):
+		var a := PI * 0.1 + k * 0.6
+		tail.append(Vector2(-h * 0.06, h * 0.33) + Vector2(cos(a), sin(a)) * h * (0.1 - k * 0.009))
+	L(tail)
+	rect(-h * 0.26, -h * 0.36, -h * 0.08, -h * 0.3)
+	ellipse(Vector2(0, -h * 0.35), Vector2(h * 0.12, h * 0.12), true, 10)
+	dot(Vector2(-h * 0.02, -h * 0.37), 2.5)
+	arc(Vector2(h * 0.14, -h * 0.02), Vector2(h * 0.09, h * 0.12), -80, 80, 5)
+	for k in range(3):
+		L([Vector2(h * 0.02, -h * 0.47 + k * 0), Vector2(h * (0.0 + k * 0.05), -h * 0.52)])
+
+
+# 바닥에서 자라는 해초 (바닥 가운데가 (0, 0))
+func seaweed(h: float) -> void:
+	for k in range(rng.randi_range(2, 4)):
+		var x := (k - 1.5) * 14.0
+		var top := h * R(0.6, 1.0)
+		var a := []
+		var b := []
+		for i in range(9):
+			var y := -top * i / 8.0
+			var sway := sin(i * 1.1 + k) * 10.0
+			var half := lerpf(7.0, 1.0, i / 8.0)
+			a.append(Vector2(x + sway - half, y))
+			b.append(Vector2(x + sway + half, y))
+		b.reverse()
+		col(BG)
+		shape(a + b)
+
+
+# 가지 뻗은 산호 (바닥 가운데가 (0, 0))
+func coral(h: float) -> void:
+	_coral_branch(Vector2.ZERO, -PI / 2.0, h * 0.45, 3)
+
+
+func _coral_branch(from: Vector2, angle: float, length: float, depth: int) -> void:
+	var to := from + Vector2.from_angle(angle) * length
+	var n := Vector2.from_angle(angle).orthogonal() * (3.0 + depth * 2.0)
+	col(BG)
+	shape([from - n, to - n * 0.7, to + n * 0.7, from + n])
+	if depth <= 0:
+		ellipse(to, Vector2(6, 6), true, 6)
+		return
+	for s in [-1.0, 1.0]:
+		_coral_branch(to, angle + s * R(0.35, 0.7), length * 0.7, depth - 1)
+
+
+# 바닥의 조약돌 (바닥 가운데가 (0, 0))
+func pebble(r: float) -> void:
+	col(BG)
+	shape(arc_pts(Vector2.ZERO, Vector2(r, r * 0.6), 180, 360, 8))
+	arc(Vector2(-r * 0.2, -r * 0.2), Vector2(r * 0.3, r * 0.2), 200, 300, 4)
+
+
+# ═══════════════ 꽃밭 낙서 (흑백 선 그림) ═══════════════
+# 숨길 물건과 겹치는 모양(나뭇잎, 버섯, 하트 모양 잎)은 쓰지 않는다.
+
+func butterfly(w: float) -> void:
+	col(BG)
+	for s in [-1.0, 1.0]:
+		ellipse(Vector2(s * w * 0.24, -w * 0.12), Vector2(w * 0.22, w * 0.17), true, 12)
+		ellipse(Vector2(s * w * 0.18, w * 0.15), Vector2(w * 0.15, w * 0.13), true, 10)
+		ellipse(Vector2(s * w * 0.26, -w * 0.12), Vector2(w * 0.09, w * 0.07), false, 8)
+		ellipse(Vector2(s * w * 0.18, w * 0.16), Vector2(w * 0.05, w * 0.05), false, 6)
+		L([Vector2(0, -w * 0.2), Vector2(s * w * 0.08, -w * 0.36)])
+		ellipse(Vector2(s * w * 0.08, -w * 0.38), Vector2(3, 3), true, 6)
+	ellipse(Vector2.ZERO, Vector2(w * 0.04, w * 0.22), true, 8)
+
+
+func ladybug(r: float) -> void:
+	col(BG)
+	for s in [-1.0, 1.0]:
+		for k in range(3):
+			L([Vector2(s * r * 0.7, -r * 0.4 + k * r * 0.4), Vector2(s * r * 1.2, -r * 0.5 + k * r * 0.5)])
+	shape(arc_pts(Vector2(0, -r * 0.75), Vector2(r * 0.5, r * 0.45), 180, 360, 8))
+	ellipse(Vector2.ZERO, Vector2(r * 0.85, r), true, 14)
+	L([Vector2(0, -r), Vector2(0, r)])
+	for p in [Vector2(-0.4, -0.4), Vector2(0.4, -0.4), Vector2(-0.45, 0.2), Vector2(0.45, 0.2), Vector2(-0.25, 0.65), Vector2(0.25, 0.65)]:
+		var q: Vector2 = p
+		ellipse(q * r, Vector2(r * 0.13, r * 0.13), false, 6)
+
+
+func bee(r: float) -> void:
+	col(BG)
+	ellipse(Vector2(-r * 0.2, -r * 0.75), Vector2(r * 0.45, r * 0.3), true, 8)
+	ellipse(Vector2(r * 0.35, -r * 0.75), Vector2(r * 0.4, r * 0.28), true, 8)
+	shape([Vector2(r * 0.95, -r * 0.1), Vector2(r * 1.3, 0), Vector2(r * 0.95, r * 0.1)])
+	ellipse(Vector2.ZERO, Vector2(r, r * 0.65), true, 14)
+	for k in range(3):
+		var x := -r * 0.2 + k * r * 0.4
+		var half := sqrt(maxf(1.0 - (x / r) * (x / r), 0.0)) * r * 0.65
+		L([Vector2(x, -half), Vector2(x, half)])
+	dot(Vector2(-r * 0.65, -r * 0.1), 2.5)
+	L([Vector2(-r * 0.8, -r * 0.4), Vector2(-r * 1.1, -r * 0.8)])
+
+
+func snail(w: float) -> void:
+	col(BG)
+	shape([Vector2(-w * 0.5, w * 0.2), Vector2(-w * 0.42, -w * 0.02), Vector2(-w * 0.3, w * 0.02), Vector2(w * 0.45, w * 0.08), Vector2(w * 0.5, w * 0.2)])
+	for s in [-0.47, -0.37]:
+		L([Vector2(s * w, -w * 0.02), Vector2((s - 0.03) * w, -w * 0.2)])
+		ellipse(Vector2((s - 0.03) * w, -w * 0.22), Vector2(3, 3), true, 6)
+	ellipse(Vector2(w * 0.08, -w * 0.1), Vector2(w * 0.27, w * 0.25), true, 14)
+	var pts := []
+	for k in range(14):
+		var a := k * 0.65
+		pts.append(Vector2(w * 0.08, -w * 0.1) + Vector2(cos(a), sin(a)) * (w * 0.018 * k))
+	L(pts)
+
+
+# 꽃송이 (꽃잎을 둥글게 두른 모양)
+func daisy(r: float) -> void:
+	col(BG)
+	var n := rng.randi_range(6, 9)
+	for i in range(n):
+		var a := TAU * i / n
+		var c := Vector2.from_angle(a) * r * 0.62
+		var pts := []
+		for m in range(8):
+			var b := TAU * m / 8.0
+			pts.append(c + Vector2(cos(b) * r * 0.38, sin(b) * r * 0.2).rotated(a))
+		shape(pts)
+	ellipse(Vector2.ZERO, Vector2(r * 0.3, r * 0.3), true, 8)
+
+
+func caterpillar(w: float) -> void:
+	col(BG)
+	for k in range(5):
+		var x := w * 0.4 - k * w * 0.2
+		var y := -sin(k * 1.3) * w * 0.06
+		L([Vector2(x, y + w * 0.1), Vector2(x, y + w * 0.18)])
+		ellipse(Vector2(x, y), Vector2(w * 0.13, w * 0.12), true, 10)
+	var hc := Vector2(-w * 0.42, -sin(4 * 1.3) * w * 0.06)
+	dot(hc + Vector2(-w * 0.04, -w * 0.02), 2.5)
+	arc(hc + Vector2(-w * 0.02, w * 0.03), Vector2(w * 0.05, w * 0.03), 20, 160, 4)
+	L([hc + Vector2(-w * 0.04, -w * 0.11), hc + Vector2(-w * 0.1, -w * 0.24)])
+	L([hc + Vector2(w * 0.04, -w * 0.11), hc + Vector2(w * 0.02, -w * 0.25)])
+
+
+func ant(w: float) -> void:
+	col(BG)
+	for k in range(3):
+		var x := (k - 1) * w * 0.12
+		L([Vector2(x, 0), Vector2(x - w * 0.08, w * 0.2), Vector2(x - w * 0.12, w * 0.22)])
+		L([Vector2(x, 0), Vector2(x + w * 0.08, -w * 0.2)])
+	ellipse(Vector2(w * 0.3, 0), Vector2(w * 0.18, w * 0.12), true, 10)
+	ellipse(Vector2(0, 0), Vector2(w * 0.12, w * 0.08), true, 8)
+	ellipse(Vector2(-w * 0.26, -w * 0.02), Vector2(w * 0.12, w * 0.1), true, 8)
+	dot(Vector2(-w * 0.3, -w * 0.04), 2.0)
+	L([Vector2(-w * 0.32, -w * 0.1), Vector2(-w * 0.44, -w * 0.24)])
+	L([Vector2(-w * 0.26, -w * 0.12), Vector2(-w * 0.3, -w * 0.28)])
+
+
+# 거미줄
+func web(r: float) -> void:
+	for k in range(8):
+		L([Vector2.ZERO, Vector2.from_angle(TAU * k / 8.0) * r])
+	for ring in range(1, 4):
+		var pts := []
+		for k in range(9):
+			var a := TAU * (k % 8) / 8.0
+			pts.append(Vector2.from_angle(a) * r * ring / 3.4)
+			if k < 8:
+				pts.append(Vector2.from_angle(a + TAU / 16.0) * r * ring / 3.4 * 0.85)
+		L(pts)
+	# 줄에 매달린 거미
+	L([Vector2(r * 0.3, r * 0.3), Vector2(r * 0.3, r * 1.1)])
+	col(BG)
+	ellipse(Vector2(r * 0.3, r * 1.2), Vector2(r * 0.12, r * 0.12), true, 8)
+	for s in [-1.0, 1.0]:
+		for k in range(3):
+			L([Vector2(r * 0.3 + s * r * 0.1, r * 1.15 + k * r * 0.05), Vector2(r * 0.3 + s * r * 0.26, r * 1.1 + k * r * 0.1)])
+
+
+func dragonfly(w: float) -> void:
+	col(BG)
+	for s in [-1.0, 1.0]:
+		ellipse(Vector2(-w * 0.08, s * w * 0.16), Vector2(w * 0.08, w * 0.17), true, 10)
+		ellipse(Vector2(w * 0.06, s * w * 0.14), Vector2(w * 0.07, w * 0.15), true, 10)
+	ellipse(Vector2(w * 0.12, 0), Vector2(w * 0.38, w * 0.025), true, 10)
+	ellipse(Vector2(-w * 0.3, 0), Vector2(w * 0.07, w * 0.06), true, 8)
+	for k in range(4):
+		L([Vector2(w * 0.05 + k * w * 0.1, -w * 0.025), Vector2(w * 0.05 + k * w * 0.1, w * 0.025)])
+
+
+# 세 잎 풀 (동그란 잎 세 장)
+func clover(r: float) -> void:
+	col(BG)
+	L([Vector2(0, 0), Vector2(r * 0.2, r * 1.1)])
+	for k in range(3):
+		var d := Vector2.from_angle(-PI / 2.0 + TAU * k / 3.0)
+		ellipse(d * r * 0.5, Vector2(r * 0.42, r * 0.42), true, 10)
+		L([Vector2.ZERO, d * r * 0.7])
+
+
+func bird(w: float) -> void:
+	col(BG)
+	for k in range(3):
+		L([Vector2(w * 0.3, -w * 0.02 + k * w * 0.03), Vector2(w * 0.52, -w * 0.12 + k * w * 0.08)])
+	L([Vector2(-w * 0.02, w * 0.18), Vector2(-w * 0.02, w * 0.32), Vector2(-w * 0.08, w * 0.32)])
+	L([Vector2(w * 0.08, w * 0.18), Vector2(w * 0.08, w * 0.32), Vector2(w * 0.02, w * 0.32)])
+	ellipse(Vector2(w * 0.04, 0), Vector2(w * 0.3, w * 0.2), true, 14)
+	ellipse(Vector2(-w * 0.26, -w * 0.14), Vector2(w * 0.14, w * 0.13), true, 10)
+	shape([Vector2(-w * 0.38, -w * 0.17), Vector2(-w * 0.52, -w * 0.12), Vector2(-w * 0.38, -w * 0.09)])
+	dot(Vector2(-w * 0.29, -w * 0.17), 2.5)
+	arc(Vector2(w * 0.08, -w * 0.02), Vector2(w * 0.16, w * 0.1), 10, 170, 6)
+
+
+func beehive(r: float) -> void:
+	col(BG)
+	L([Vector2(0, -r * 1.1), Vector2(0, -r * 1.5)])
+	for k in range(4):
+		var rr := r * lerpf(0.5, 1.0, sin((k + 0.6) / 4.2 * PI))
+		ellipse(Vector2(0, -r * 0.85 + k * r * 0.5), Vector2(rr, r * 0.3), true, 12)
+	ellipse(Vector2(0, r * 0.3), Vector2(r * 0.18, r * 0.2), false, 8)
+
+
+func watering_can(w: float) -> void:
+	col(BG)
+	shape([Vector2(w * 0.2, -w * 0.05), Vector2(w * 0.5, -w * 0.3), Vector2(w * 0.54, -w * 0.24), Vector2(w * 0.24, w * 0.08)])
+	for k in range(3):
+		dot(Vector2(w * 0.58, -w * 0.3 + k * w * 0.04) , 1.8)
+	arc(Vector2(-w * 0.25, -w * 0.02), Vector2(w * 0.16, w * 0.2), 90, 270, 8)
+	shape([Vector2(-w * 0.25, -w * 0.25), Vector2(w * 0.25, -w * 0.25), Vector2(w * 0.22, w * 0.25), Vector2(-w * 0.22, w * 0.25)])
+	L([Vector2(-w * 0.24, -w * 0.12), Vector2(w * 0.24, -w * 0.12)])
+
+
+func cloud_doodle(w: float) -> void:
+	col(BG)
+	shape(bumpy_pts(Vector2.ZERO, Vector2(w / 2, w * 0.2), rng.randi_range(5, 7), 0.25))
+
+
+# 벌이 날아간 자국 같은 점선 고리
+func loop_path(w: float) -> void:
+	var pts := []
+	for i in range(25):
+		var t := i / 24.0
+		pts.append(Vector2(lerpf(-w / 2, w / 2, t) + sin(t * TAU) * w * 0.12, -sin(t * TAU * 1.0) * w * 0.18 * sin(t * PI)))
+	for i in range(0, pts.size() - 1, 2):
+		L([pts[i], pts[i + 1]])
+
+
+# 바닥에서 자라는 키 큰 꽃 (바닥 가운데가 (0, 0))
+func tall_flower(h: float) -> void:
+	var top := Vector2(R(-12, 12), -h)
+	L([Vector2.ZERO, Vector2(top.x * 0.3, -h * 0.5), top])
+	arc(Vector2(top.x * 0.2 + 14, -h * 0.35), Vector2(14, 8), 150, 330, 5)
+	arc(Vector2(top.x * 0.2 - 12, -h * 0.5), Vector2(14, 8), 210, 390, 5)
+	push(top, 1.0)
+	daisy(h * 0.2)
+	pop()
+
+
+# 바닥의 풀 포기 (바닥 가운데가 (0, 0))
+func grass_blades(h: float) -> void:
+	for k in range(rng.randi_range(3, 6)):
+		var x := R(-16, 16)
+		L([Vector2(x, 0), Vector2(x + R(-6, 6), -h * R(0.5, 1.0) * 0.5), Vector2(x + R(-14, 14), -h * R(0.5, 1.0))])

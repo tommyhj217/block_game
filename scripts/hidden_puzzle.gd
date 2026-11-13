@@ -88,9 +88,17 @@ func _build(seed_value: int, s: Dictionary) -> void:
 		_image_scene(Config.HIDDEN_SCENE_DIR + "/" + images[_rng.randi_range(0, images.size() - 1)])
 	if image == null:
 		var pick_theme := _rng.randf()
-		if pick_theme < 0.4:
-			theme = "space"
-			_space(int(s["props"]))
+		if pick_theme < 0.66:
+			# 흑백 낙서 장면 세 가지 중 하나
+			if pick_theme < 0.22:
+				theme = "space"
+				_space(int(s["props"]))
+			elif pick_theme < 0.44:
+				theme = "sea"
+				_sea(int(s["props"]))
+			else:
+				theme = "garden"
+				_garden(int(s["props"]))
 			# 낙서 그림에서는 물건도 낙서처럼 작게, 다른 낙서와 겹치지 않는 빈 곳에 놓는다.
 			# 대신 찾지 않아도 되는 물건을 더 많이 섞어서 헷갈리게 한다.
 			s = s.duplicate()
@@ -99,7 +107,7 @@ func _build(seed_value: int, s: Dictionary) -> void:
 			s["free"] = true   # 물건을 다른 그림과 겹치지 않는 자리에, 그림 전체에 고르게 놓는다
 			s["clear"] = 0.0
 			s["extras"] = int(s["extras"]) + 8
-		elif pick_theme < 0.7:
+		elif pick_theme < 0.83:
 			theme = "room"
 			_room()
 			_wall_items()
@@ -871,3 +879,174 @@ func _space(count: int) -> void:
 				P.ellipse(Vector2.ZERO, Vector2(r * 0.7, r * 0.7), true, 8)
 			_: P.dot(Vector2.ZERO, 2.5)
 		_layer()
+
+
+# ═══════════════ 낙서 장면 공통: 겹치지 않게 흩뿌리기 ═══════════════
+
+# things: [[그리는 함수 이름, 차지하는 반지름, 함수에 넘길 크기 배율(0이면 크기 없이 부름)], ...]
+# blocked: 그 자리(pos, r)에 놓으면 안 되는지 알려 주는 함수 (예: 바닥 아래)
+# 큰 것부터 차례로, 이미 놓은 것과 겹치지 않는 무작위 자리에 놓는다.
+func _scatter(things: Array, blocked: Callable, max_tilt: float = 0.6) -> void:
+	var w := world_size.x
+	var h := world_size.y
+	var P := _props
+	var placed := []
+	for thing in things:
+		var r: float = thing[1] * _rng.randf_range(0.85, 1.1)
+		var pos := Vector2.ZERO
+		var ok := false
+		for attempt in range(40):
+			pos = Vector2(_rng.randf_range(r * 0.7, w - r * 0.7), _rng.randf_range(r * 0.7, h - r * 0.7))
+			if blocked.call(pos, r):
+				continue
+			ok = true
+			for q in placed:
+				if pos.distance_to(q["pos"]) < r + q["r"] + 4.0:
+					ok = false
+					break
+			if ok:
+				break
+		if not ok:
+			continue
+		placed.append({"pos": pos, "r": r})
+		P.begin(pos, 1.0, _rng.randf() < 0.5, _rng.randf_range(-max_tilt, max_tilt))
+		# call(이름, 값): 이름으로 함수를 부른다 (Python의 getattr(obj, name)(값)과 같다)
+		if thing[2] > 0.0:
+			P.call(thing[0], r * thing[2])
+		else:
+			P.call(thing[0])
+		_layer()
+
+
+# things 목록에 같은 것을 n개 넣는 도우미
+func _many(things: Array, n: int, method: String, radius: float, factor: float) -> void:
+	for i in range(n):
+		things.append([method, radius, factor])
+
+
+# ═══════════════ 바닷속 낙서 장면 ═══════════════
+
+func _sea(count: int) -> void:
+	var w := world_size.x
+	var h := world_size.y
+	var P := _props
+	_wall_h = 0.0
+	var ground := h * _rng.randf_range(0.86, 0.9)
+	# 맨 뒤: 물결(위쪽)과 물살(짧은 물결선)
+	P.begin(Vector2.ZERO, 1.0)
+	for row in range(3):
+		var x := -_rng.randf_range(0, 60)
+		while x < w:
+			P.arc(Vector2(x + 30, 30.0 + row * 26), Vector2(30, 12), 0, 180, 6)
+			x += 60
+	for i in range(60):
+		var c := Vector2(_rng.randf_range(0, w), _rng.randf_range(130, ground - 20))
+		var l := _rng.randf_range(24, 60)
+		P.L([c + Vector2(-l, 0), c + Vector2(-l * 0.5, -6), c + Vector2(0, 0), c + Vector2(l * 0.5, 6), c + Vector2(l, 0)])
+	_layer()
+	# 모래 바닥
+	P.begin(Vector2.ZERO, 1.0)
+	P.col(HiddenProps.BG)
+	var top := []
+	var x := 0.0
+	while x <= w:
+		top.append(Vector2(x, ground + sin(x * 0.012) * 16.0 + sin(x * 0.031) * 6.0))
+		x += 40.0
+	P.L(top)
+	P.F(top + [Vector2(w, h), Vector2(0, h)])
+	for i in range(70):
+		var p := Vector2(_rng.randf_range(0, w), _rng.randf_range(ground + 30, h - 6))
+		if _rng.randf() < 0.5:
+			P.dot(p, 1.8)
+		else:
+			P.arc(p, Vector2(_rng.randf_range(8, 16), 4), 190, 350, 4)
+	_layer()
+	# 바닥에서 자라는 해초, 산호, 조약돌
+	var gx := _rng.randf_range(10, 60)
+	while gx < w:
+		P.begin(Vector2(gx, ground + sin(gx * 0.012) * 16.0 + 14.0), 1.0, _rng.randf() < 0.5)
+		match _rng.randi_range(0, 3):
+			0: P.seaweed(_rng.randf_range(120, 220))
+			1: P.coral(_rng.randf_range(110, 170))
+			2: P.pebble(_rng.randf_range(22, 44))
+			_: P.seaweed(_rng.randf_range(90, 160))
+		_layer()
+		gx += _rng.randf_range(50, 110)
+
+	var things := []
+	things.append(["whale", 150.0, 1.9])
+	things.append(["submarine", 110.0, 1.9])
+	_many(things, 2, "octopus", 90.0, 0.6)
+	_many(things, 3, "jellyfish", 80.0, 0.5)
+	_many(things, 2, "turtle", 80.0, 1.9)
+	_many(things, 2, "seahorse", 70.0, 1.9)
+	_many(things, 3, "crab", 60.0, 1.8)
+	_many(things, 2, "anchor", 60.0, 1.8)
+	things.append(["chest", 65.0, 1.6])
+	_many(things, 5, "shell", 30.0, 0.7)
+	_many(things, int(count * 1.4), "bubble", 20.0, 0.85)
+	_many(things, int(count * 1.2), "bubble", 11.0, 0.85)
+	_many(things, int(count * 0.9), "tiny_ring", 7.0, 0.7)
+	_many(things, int(count * 0.7), "tiny_dot", 6.0, 1.0)
+	_scatter(things, func(pos: Vector2, r: float): return pos.y > ground - r * 0.6 or pos.y < 100.0 + r * 0.5, 0.4)
+
+
+# ═══════════════ 꽃밭 낙서 장면 ═══════════════
+
+func _garden(count: int) -> void:
+	var w := world_size.x
+	var h := world_size.y
+	var P := _props
+	_wall_h = 0.0
+	var ground := h * _rng.randf_range(0.88, 0.92)
+	# 맨 뒤: 바람결
+	P.begin(Vector2.ZERO, 1.0)
+	for i in range(40):
+		var c := Vector2(_rng.randf_range(0, w), _rng.randf_range(40, ground - 60))
+		P.arc(c, Vector2(_rng.randf_range(30, 70), _rng.randf_range(8, 16)), 200, 320, 5)
+	_layer()
+	# 땅
+	P.begin(Vector2.ZERO, 1.0)
+	P.col(HiddenProps.BG)
+	var top := []
+	var x := 0.0
+	while x <= w:
+		top.append(Vector2(x, ground + sin(x * 0.01) * 12.0))
+		x += 40.0
+	P.L(top)
+	P.F(top + [Vector2(w, h), Vector2(0, h)])
+	for i in range(50):
+		var p := Vector2(_rng.randf_range(0, w), _rng.randf_range(ground + 24, h - 6))
+		P.arc(p, Vector2(_rng.randf_range(6, 14), 5), 0, 360, 6)
+	_layer()
+	# 땅에서 자라는 꽃과 풀
+	var gx := _rng.randf_range(10, 50)
+	while gx < w:
+		P.begin(Vector2(gx, ground + sin(gx * 0.01) * 12.0 + 8.0), 1.0, _rng.randf() < 0.5)
+		if _rng.randf() < 0.45:
+			P.tall_flower(_rng.randf_range(120, 240))
+		else:
+			P.grass_blades(_rng.randf_range(40, 90))
+		_layer()
+		gx += _rng.randf_range(34, 80)
+
+	var things := []
+	_many(things, 3, "cloud_doodle", 100.0, 1.8)
+	_many(things, 2, "web", 95.0, 0.75)
+	_many(things, 2, "beehive", 80.0, 0.6)
+	things.append(["watering_can", 80.0, 1.6])
+	_many(things, 4, "butterfly", 70.0, 1.7)
+	_many(things, 3, "bird", 70.0, 1.7)
+	_many(things, 3, "dragonfly", 65.0, 1.8)
+	_many(things, 3, "snail", 60.0, 1.8)
+	_many(things, 3, "caterpillar", 60.0, 1.8)
+	_many(things, 4, "loop_path", 70.0, 1.8)
+	_many(things, 6, "daisy", 36.0, 0.9)
+	_many(things, 5, "bee", 34.0, 0.7)
+	_many(things, 6, "ladybug", 26.0, 0.75)
+	_many(things, 5, "clover", 26.0, 0.8)
+	_many(things, 6, "ant", 30.0, 1.7)
+	_many(things, int(count * 1.0), "asterisk", 12.0, 0.8)
+	_many(things, int(count * 1.0), "tiny_ring", 8.0, 0.7)
+	_many(things, int(count * 0.8), "tiny_dot", 6.0, 1.0)
+	_scatter(things, func(pos: Vector2, r: float): return pos.y > ground - r * 0.7)

@@ -32,7 +32,7 @@
 - `scripts/hidden_world.gd` (`HiddenWorld`): 그림을 그린다. 장면 선과 물건 선은 같은 색(`HIDDEN_INK`)·굵기. 확대·이동은 노드 scale/position으로 해서 다시 그리지 않는다. `scripts/shape_icon.gd`는 찾을 목록 칸의 물건 그림.
 - `scripts/hidden_game.gd`: 한 손가락 끌기 = 이동, 두 손가락 = 확대(PC는 휠), 톡 = 찾기. 엉뚱한 곳을 누르면 잠깐 못 누름(+혼자 하기는 시간 벌칙). 💡 힌트는 근처 동그라미만 보여 줌. 시작 전 3·2·1.
 - 혼자 하기(오락실 방식): 50단계. 난이도는 `Config.HIDDEN_STAGE_FIRST` → `HIDDEN_STAGE_LAST` 사이를 단계만큼 섞는다(`HiddenPuzzle.stage_settings`). 제한 시간(시간 막대), 하트 3개(실수하면 하나 줄어듦), 점수(찾기 + 연속 + 남은 시간·하트 보너스). 단계(`[hidden] level`)와 최고 총점(`best_score`)을 `user://settings.cfg`에 저장, 이어서 하는 총점은 `Net.hidden_run_score`.
-- 장면 4종: 우주 낙서(`_space`, 흑백 선 그림. 낙서를 겹치지 않게 흩뿌리고 물건은 작게, 빈 곳에 고르게 놓음 — `s["free"]`), 교실(`_room`), 공원(`_park`), 넣어 둔 그림 파일(`_image_scene`). `assets/scenes/`에 png·jpg를 넣으면 그림의 어두운 선·색 경계를 선 자리로 읽어 그 위에 물건을 숨긴다(방법은 `assets/scenes/README.txt`).
+- 장면 6종: 흑백 낙서 3종 — 우주(`_space`), 바닷속(`_sea`), 꽃밭(`_garden`). 바닷속·꽃밭은 `_scatter(things, blocked)`로 흩뿌린다(새 낙서 장면은 소품 함수를 만들고 things 목록만 채우면 됨). 흑백 선 그림. 낙서를 겹치지 않게 흩뿌리고 물건은 작게, 빈 곳에 고르게 놓음 — `s["free"]`), 교실(`_room`), 공원(`_park`), 넣어 둔 그림 파일(`_image_scene`). `assets/scenes/`에 png·jpg를 넣으면 그림의 어두운 선·색 경계를 선 자리로 읽어 그 위에 물건을 숨긴다(방법은 `assets/scenes/README.txt`).
 - 대결: `Net.start_match("hidden")`. 찾을 때마다 `Net.send_score`, 방장이 처음 다 찾은 사람을 `declare_winner`로 정함. 🏠로 나가면 점수 -1(그만둠).
 - `Net.match_mode`("blocks"/"hidden")로 어느 화면을 열지 정한다.
 
